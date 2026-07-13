@@ -1,0 +1,883 @@
+Proje adı: Corporate Helpdesk
+
+Şirket çalışanlarının IT, insan kaynakları, finans, satın alma ve idari işler taleplerini oluşturabileceği; ilgili departmanların bu talepleri yönetebileceği kurumsal destek uygulaması.
+
+Stajyer üç hafta sonunda şu süreçlerin tamamını görmüş olacak:
+
+İhtiyaç analizi
+→ Sistem tasarımı
+→ Database tasarımı
+→ Backend API
+→ Frontend
+→ Microsoft ile giriş
+→ Yetkilendirme
+→ Test
+→ Docker
+→ CI/CD
+→ Deployment
+→ Dokümantasyon
+
+FastAPI; Python type hint’leriyle API geliştirmeye yönelik bir framework’tür ve otomatik OpenAPI/Swagger desteği sunar. React tarafında TypeScript kullanılabilir. MSAL ise Microsoft Identity Platform’dan token alınarak SPA ve API güvenliği sağlamak için kullanılacaktır.
+
+1. Projenin MVP kapsamı
+
+Üç haftada tamamlanması gereken temel özellikler:
+
+Çalışan tarafı
+Microsoft şirket hesabıyla giriş
+Yeni destek talebi oluşturma
+Kategori ve departman seçme
+Öncelik belirleme
+Kendi taleplerini listeleme
+Talep detayını görüntüleme
+Talebe yorum ekleme
+Talep durumunu takip etme
+Uygulama içi bildirimleri görüntüleme
+Destek personeli tarafı
+Departmanına gelen talepleri görüntüleme
+Talebi kendi üzerine alma
+Talebi başka personele atama
+Talep durumunu değiştirme
+Dahili veya kullanıcıya açık yorum ekleme
+Talebi çözüldü olarak işaretleme
+Admin tarafı
+Kullanıcıları görüntüleme
+Kullanıcı rollerini yönetme
+Departmanları ve kategorileri yönetme
+Tüm talepleri görüntüleme
+Temel dashboard metriklerini görüntüleme
+Geciken talepleri görüntüleme
+2. Teknoloji yığını
+Frontend
+Teknoloji	Kullanım amacı
+React	Kullanıcı arayüzü
+TypeScript	Tip güvenli frontend geliştirme
+Vite	React projesini çalıştırma ve build alma
+React Router	Sayfa yönlendirmeleri
+MSAL React	Microsoft hesabıyla giriş
+Axios	Backend API istekleri
+TanStack Query	API verilerinin yönetimi ve cache
+React Hook Form	Form yönetimi
+Zod	Form doğrulama
+Tailwind CSS	Arayüz tasarımı
+Recharts	Dashboard grafikleri
+
+React resmi dokümantasyonu TypeScript kullanımını destekler ve modern React uygulamalarının Vite gibi build araçlarıyla kurulabileceğini belirtir.
+
+Backend
+Teknoloji	Kullanım amacı
+Python 3.12+	Backend programlama dili
+FastAPI	REST API
+Uvicorn	ASGI uygulama sunucusu
+SQLAlchemy 2	ORM ve database işlemleri
+Alembic	Database migration
+Pydantic	Request ve response doğrulama
+PyJWT veya python-jose	Microsoft token doğrulama
+HTTPX	Harici HTTP istekleri ve testler
+Pytest	Backend testleri
+Ruff	Kod kalitesi ve lint
+mypy	Tip kontrolü
+
+FastAPI testleri doğrudan Pytest ve HTTPX tabanlı TestClient ile gerçekleştirilebilir.
+
+Database
+Teknoloji	Kullanım amacı
+PostgreSQL	Ana ilişkisel database
+Alembic	Schema değişikliklerinin takibi
+pgAdmin	Opsiyonel database yönetimi
+Redis	Opsiyonel cache ve görev altyapısı
+
+PostgreSQL ilişkisel veri, tablo, constraint, index ve transaction yönetimi için kullanılacaktır. Güncel resmi dokümantasyon PostgreSQL 18’i current sürüm olarak gösterse de şirket ortamında destek politikası doğrultusunda PostgreSQL 16, 17 veya 18 seçilebilir.
+
+DevOps
+Teknoloji	Kullanım amacı
+Docker	Backend ve frontend container’ları
+Docker Compose	Servisleri beraber çalıştırma
+GitHub	Kaynak kod yönetimi
+GitHub Actions	CI pipeline
+Nginx	Reverse proxy
+Linux sunucu	Deployment ortamı
+Let’s Encrypt	HTTPS sertifikası
+
+FastAPI’nin resmi deployment dokümantasyonu container tabanlı dağıtımı yaygın bir yaklaşım olarak tanımlar.
+
+3. Microsoft MSAL mimarisi
+
+Sistemde uygulamanın kendi şifre ekranı olmayacak. Kullanıcı şirket Microsoft hesabıyla giriş yapacak.
+
+Kullanıcı
+   ↓
+React uygulaması
+   ↓
+MSAL React
+   ↓
+Microsoft Entra ID
+   ↓
+Access Token
+   ↓
+FastAPI
+   ↓
+Token doğrulama
+   ↓
+PostgreSQL
+
+MSAL, Microsoft Identity Platform’dan güvenlik token’ı alınmasını sağlar. Bu token Microsoft servislerine veya geliştirilen özel API’ye erişimde kullanılabilir.
+
+React tarafında kullanılacak paketler
+npm install @azure/msal-browser @azure/msal-react
+
+Temel yapı:
+
+MsalProvider
+LoginButton
+LogoutButton
+ProtectedRoute
+AcquireTokenSilent
+Axios interceptor
+
+React uygulaması API’ye istek atarken header’a token ekleyecek:
+
+Authorization: Bearer ACCESS_TOKEN
+FastAPI tarafında yapılacaklar
+
+Backend gelen token üzerinde şunları kontrol edecek:
+
+Token imzası geçerli mi?
+Token süresi dolmuş mu?
+Issuer doğru Microsoft tenant mı?
+Audience bizim API’nin Client ID değeri mi?
+Kullanıcının hesabı aktif mi?
+Kullanıcının gerekli rolü var mı?
+Entra ID üzerinde gereken kayıtlar
+
+İki ayrı App Registration öneriyorum:
+
+Frontend uygulaması
+Ad: corporate-helpdesk-web
+Tür: Single Page Application
+Redirect URI:
+http://localhost:5173
+https://helpdesk.sirketadi.com
+Backend API
+Ad: corporate-helpdesk-api
+Expose an API:
+api://BACKEND_CLIENT_ID/access_as_user
+
+Microsoft’un resmi React SPA örneği, React uygulamasının tenant bilgileriyle hazırlanmasını ve Microsoft Identity Platform üzerinden giriş yapılmasını gösterir.
+
+4. Kullanılacak servisler
+Zorunlu servisler
+1. Microsoft Entra ID
+
+Kullanım amacı:
+
+Şirket hesabıyla giriş
+Token üretimi
+Kullanıcı kimliğinin doğrulanması
+Tenant sınırlandırması
+Kurumsal SSO
+
+Gereken bilgiler:
+
+TENANT_ID
+FRONTEND_CLIENT_ID
+BACKEND_CLIENT_ID
+API_SCOPE
+2. PostgreSQL
+
+Kullanım amacı:
+
+Kullanıcılar
+Departmanlar
+Talepler
+Yorumlar
+Bildirimler
+İşlem geçmişi
+Roller
+Kategoriler
+3. GitHub
+
+Kullanım amacı:
+
+Repository
+Branch yönetimi
+Pull request
+Code review
+Issue takibi
+GitHub Actions
+4. Docker
+
+Kullanım amacı:
+
+frontend
+backend
+postgres
+nginx
+
+servislerini aynı ortamda çalıştırmak.
+
+5. GitHub Actions
+
+Her pull request’te:
+
+Backend lint
+Backend test
+Frontend lint
+Frontend build
+Docker build kontrolü
+
+çalıştırılacak.
+
+Opsiyonel servisler
+Redis
+
+İlk sürümde zorunlu değildir.
+
+Daha sonra:
+
+Cache
+Rate limiting
+Arka plan görevleri
+Bildirim kuyruğu
+
+için kullanılabilir.
+
+Microsoft Graph
+
+İkinci sürümde:
+
+Kullanıcının adını ve profilini alma
+Departman bilgisi alma
+Profil fotoğrafı alma
+Kullanıcı listesini senkronize etme
+
+için kullanılabilir.
+
+SMTP veya Microsoft Graph Mail
+
+Talep oluşturulduğunda veya güncellendiğinde e-posta göndermek için kullanılabilir.
+
+Sentry
+
+Frontend ve backend hatalarını takip etmek için kullanılabilir.
+
+Azure Blob Storage veya MinIO
+
+Dosya eklerinin saklanması için kullanılabilir.
+
+Üç haftalık MVP’de dosyalar local volume üzerinde tutulabilir. Ancak production ortamında object storage tercih edilmelidir.
+
+5. Database tabloları
+users
+id
+entra_object_id
+email
+full_name
+role
+department_id
+is_active
+created_at
+updated_at
+
+Roller:
+
+ADMIN
+SUPPORT_AGENT
+EMPLOYEE
+departments
+id
+name
+description
+is_active
+created_at
+
+Örnek departmanlar:
+
+IT
+HR
+FINANCE
+PURCHASING
+ADMINISTRATIVE_AFFAIRS
+categories
+id
+name
+department_id
+default_priority
+is_active
+created_at
+tickets
+id
+ticket_number
+title
+description
+status
+priority
+category_id
+department_id
+created_by_id
+assigned_to_id
+created_at
+updated_at
+resolved_at
+due_at
+
+Durumlar:
+
+OPEN
+ASSIGNED
+IN_PROGRESS
+WAITING_FOR_USER
+RESOLVED
+CLOSED
+CANCELLED
+
+Öncelikler:
+
+LOW
+MEDIUM
+HIGH
+CRITICAL
+ticket_comments
+id
+ticket_id
+user_id
+message
+is_internal
+created_at
+
+is_internal=true olduğunda yorumu yalnızca destek personeli ve admin görebilir.
+
+ticket_history
+id
+ticket_id
+actor_user_id
+action
+old_value
+new_value
+created_at
+
+Örnek işlemler:
+
+TICKET_CREATED
+STATUS_CHANGED
+PRIORITY_CHANGED
+ASSIGNED
+COMMENT_ADDED
+TICKET_RESOLVED
+notifications
+id
+recipient_user_id
+ticket_id
+title
+message
+is_read
+created_at
+6. Backend klasör yapısı
+backend/
+├── app/
+│   ├── api/
+│   │   ├── dependencies.py
+│   │   └── v1/
+│   │       ├── auth.py
+│   │       ├── tickets.py
+│   │       ├── comments.py
+│   │       ├── notifications.py
+│   │       ├── departments.py
+│   │       ├── categories.py
+│   │       └── reports.py
+│   ├── core/
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── security.py
+│   │   ├── logging.py
+│   │   └── exceptions.py
+│   ├── models/
+│   ├── schemas/
+│   ├── repositories/
+│   ├── services/
+│   ├── tests/
+│   └── main.py
+├── alembic/
+├── Dockerfile
+├── pyproject.toml
+└── alembic.ini
+
+Backend akışı:
+
+Router
+  ↓
+Service
+  ↓
+Repository
+  ↓
+SQLAlchemy
+  ↓
+PostgreSQL
+7. Frontend klasör yapısı
+frontend/
+├── src/
+│   ├── api/
+│   │   ├── axios-client.ts
+│   │   ├── tickets-api.ts
+│   │   └── users-api.ts
+│   ├── auth/
+│   │   ├── msal-config.ts
+│   │   ├── AuthProvider.tsx
+│   │   └── ProtectedRoute.tsx
+│   ├── components/
+│   ├── features/
+│   │   ├── tickets/
+│   │   ├── users/
+│   │   ├── notifications/
+│   │   └── dashboard/
+│   ├── layouts/
+│   ├── pages/
+│   ├── routes/
+│   ├── schemas/
+│   ├── types/
+│   ├── hooks/
+│   └── main.tsx
+├── Dockerfile
+├── package.json
+└── vite.config.ts
+8. Üç haftalık çalışma planı
+
+Plan toplam 15 iş günü üzerinden hazırlanmıştır.
+
+1. Hafta — Analiz, mimari ve backend temeli
+2. Gün — Proje analizi
+Stajyerin görevleri
+Proje amacını yazmak
+Kullanıcı rollerini belirlemek
+Kullanıcı senaryolarını hazırlamak
+MVP kapsamını belirlemek
+Kapsam dışı özellikleri yazmak
+GitHub repository oluşturmak
+Proje board’u oluşturmak
+Hazırlanacak belgeler
+docs/requirements.md
+docs/user-stories.md
+docs/scope.md
+README.md
+Gün sonu çıktısı
+En az 10 kullanıcı hikâyesi
+Her hikâye için kabul kriteri
+MVP özellik listesi
+GitHub proje board’u
+2. Gün — Sistem ve database tasarımı
+Stajyerin görevleri
+Sistem mimarisi çizmek
+Database tablolarını belirlemek
+Tabloların ilişkilerini kurmak
+ER diyagramı hazırlamak
+API endpoint listesini çıkarmak
+Hazırlanacak belgeler
+docs/architecture.md
+docs/database-design.md
+docs/api-contract.md
+Gün sonu çıktısı
+React → MSAL → FastAPI → PostgreSQL
+
+akışını gösteren sistem diyagramı ve tamamlanmış database modeli.
+
+3. Gün — Backend kurulumu
+Yapılacaklar
+FastAPI projesi oluşturmak
+Klasör yapısını hazırlamak
+Environment ayarlarını yapmak
+PostgreSQL bağlantısını kurmak
+SQLAlchemy session oluşturmak
+Health endpoint hazırlamak
+Docker ile PostgreSQL çalıştırmak
+Endpoint
+GET /api/health
+
+Örnek response:
+
+{
+  "status": "healthy",
+  "database": "connected"
+}
+Gün sonu çıktısı
+
+FastAPI ve PostgreSQL Docker üzerinden beraber çalışmalı.
+
+4. Gün — Modeller ve migration
+Yapılacaklar
+User modeli
+Department modeli
+Category modeli
+Ticket modeli
+Comment modeli
+Notification modeli
+TicketHistory modeli
+Alembic kurulumu
+İlk migration
+Seed script
+Seed verileri
+5 departman
+10 kategori
+1 admin
+2 destek personeli
+3 çalışan
+Gün sonu çıktısı
+alembic upgrade head
+
+komutu ile bütün tablolar oluşmalı.
+
+5. Gün — Microsoft MSAL ve backend güvenliği
+Frontend tarafı
+Entra App Registration
+MSAL config
+Login
+Logout
+Token alma
+Backend tarafı
+Bearer token okuma
+Microsoft JWKS anahtarlarını alma
+Token doğrulama
+Kullanıcıyı database’de oluşturma veya güncelleme
+Current user dependency
+Rol kontrolü
+Endpoint’ler
+GET /api/auth/me
+GET /api/auth/permissions
+Hafta sonu demo
+
+Stajyer şunları göstermeli:
+
+Microsoft hesabıyla giriş yapma
+Access token alma
+FastAPI’ye token gönderme
+Backend’in kullanıcıyı tanıması
+PostgreSQL’de kullanıcı kaydının oluşması
+2. Hafta — Temel ürün geliştirme
+3. Gün — Talep oluşturma
+Backend
+POST /api/tickets
+GET  /api/tickets/mine
+GET  /api/tickets/{ticket_id}
+Kurallar
+Başlık zorunlu
+Açıklama en az 20 karakter
+Kategori aktif olmalı
+Kullanıcı yalnızca kendi taleplerini görebilmeli
+Talep numarası otomatik üretilmeli
+
+Örnek:
+
+TCK-2026-000001
+Frontend
+Yeni talep formu
+Form doğrulama
+Başarılı işlem mesajı
+Hata mesajları
+7. Gün — Talep listeleme ve filtreleme
+Backend
+GET /api/tickets/mine
+
+Query parametreleri:
+
+status
+priority
+category_id
+search
+page
+page_size
+Frontend
+Taleplerim tablosu
+Arama
+Durum filtresi
+Öncelik filtresi
+Pagination
+Loading state
+Empty state
+8. Gün — Destek personeli paneli
+Backend
+GET  /api/support/tickets
+POST /api/support/tickets/{id}/assign
+PATCH /api/support/tickets/{id}/status
+PATCH /api/support/tickets/{id}/priority
+Kurallar
+Support Agent yalnızca kendi departmanının taleplerini görmeli.
+Admin bütün talepleri görebilmeli.
+Employee destek endpoint’lerine erişememeli.
+Her değişiklik ticket history tablosuna yazılmalı.
+Frontend
+Destek talepleri ekranı
+Talep atama
+Durum değiştirme
+Öncelik değiştirme
+9. Gün — Yorum ve işlem geçmişi
+Backend
+GET  /api/tickets/{id}/comments
+POST /api/tickets/{id}/comments
+GET  /api/tickets/{id}/history
+Özellikler
+Çalışan yorumu
+Destek personeli yorumu
+Dahili yorum
+Tarih ve kullanıcı bilgisi
+İşlem geçmişi timeline’ı
+Frontend
+Yorum alanı
+Yorum listesi
+Talep timeline’ı
+Dahili yorum göstergesi
+10. Gün — Bildirim ve dashboard
+Backend
+GET   /api/notifications
+PATCH /api/notifications/{id}/read
+PATCH /api/notifications/read-all
+GET   /api/reports/summary
+Dashboard metrikleri
+Toplam açık talep
+Bugün oluşturulan talep
+Çözülen talep
+Geciken talep
+Önceliğe göre dağılım
+Departmana göre dağılım
+Hafta sonu demo
+
+Stajyer şunları göstermeli:
+
+Çalışan olarak talep oluşturma
+Destek personeli olarak talebi görme
+Talebi üzerine alma
+Durum değiştirme
+Yorum ekleme
+Bildirim oluşması
+Talebin çözülmesi
+Dashboard metriklerinin güncellenmesi
+3. Hafta — Kurumsallaştırma, test ve deployment
+4. Gün — Admin paneli
+Backend
+GET   /api/admin/users
+PATCH /api/admin/users/{id}/role
+GET   /api/admin/departments
+POST  /api/admin/departments
+PATCH /api/admin/departments/{id}
+GET   /api/admin/categories
+POST  /api/admin/categories
+PATCH /api/admin/categories/{id}
+Frontend
+Kullanıcı listesi
+Rol değiştirme
+Departman yönetimi
+Kategori yönetimi
+Aktif/pasif işlemleri
+12. Gün — Backend testleri
+Unit test
+Ticket number oluşturma
+SLA tarihi hesaplama
+Rol kontrolü
+Status transition kontrolü
+Integration test
+Talep oluşturma
+Talep listeleme
+Yetkisiz erişim
+Talep atama
+Durum değiştirme
+Yorum ekleme
+Zorunlu güvenlik testleri
+Token olmadan erişim
+Geçersiz token
+Süresi dolmuş token
+Yanlış audience
+Employee’nin admin endpoint’ine erişmesi
+Başka kullanıcının talebini açma girişimi
+Hedef
+
+Kritik servisler için en az:
+
+%70 test coverage
+13. Gün — Frontend kalite ve hata yönetimi
+Yapılacaklar
+Form validation
+Global error handler
+401 yönlendirmesi
+403 yetki ekranı
+404 ekranı
+Loading skeleton
+Empty state
+Responsive tasarım
+Token yenileme
+Session timeout davranışı
+Kullanıcı bildirimleri
+Kontroller
+npm run lint
+npm run build
+
+hatasız tamamlanmalı.
+
+14. Gün — Docker ve CI/CD
+Docker servisleri
+services:
+  frontend:
+  backend:
+  postgres:
+  nginx:
+Docker gereksinimleri
+Backend Dockerfile
+Frontend Dockerfile
+PostgreSQL volume
+Environment variables
+Health check
+Backend başlangıcında migration
+Nginx reverse proxy
+GitHub Actions pipeline
+Checkout
+↓
+Python kurulumu
+↓
+Backend dependencies
+↓
+Ruff
+↓
+Pytest
+↓
+Node kurulumu
+↓
+Frontend dependencies
+↓
+Frontend lint
+↓
+Frontend build
+↓
+Docker build
+Branch yapısı
+main
+develop
+feature/*
+bugfix/*
+
+Doğrudan main branch’ine kod gönderilmemeli. Pull request kullanılmalı.
+
+15. Gün — Deployment ve final sunumu
+Deployment
+Linux sunucuda Docker kurulumu
+Environment dosyasının hazırlanması
+Docker Compose ile servislerin kaldırılması
+Nginx ayarları
+HTTPS
+Entra redirect URI güncellemesi
+Production smoke test
+Database backup komutu
+Smoke test
+Giriş yapılabiliyor mu?
+Token doğrulanıyor mu?
+Talep oluşturulabiliyor mu?
+Admin paneli çalışıyor mu?
+PostgreSQL verileri kalıcı mı?
+Container yeniden başladığında veri korunuyor mu?
+HTTPS çalışıyor mu?
+Stajyerin final sunumu
+
+Sunumda şunlar bulunmalı:
+
+1. Çözülen problem
+2. Kullanıcı rolleri
+3. Sistem mimarisi
+4. Database tasarımı
+5. MSAL authentication akışı
+6. API yapısı
+7. Test yaklaşımı
+8. Docker ve CI/CD
+9. Karşılaşılan sorunlar
+10. İkinci sürüm önerileri
+11. Docker Compose servis yapısı
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: helpdesk
+      POSTGRES_USER: helpdesk_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:
+10. Environment değişkenleri
+Backend .env
+APP_ENV=development
+APP_NAME=Corporate Helpdesk
+API_V1_PREFIX=/api/v1
+
+DATABASE_URL=postgresql+psycopg://helpdesk_user:password@postgres:5432/helpdesk
+
+AZURE_TENANT_ID=your-tenant-id
+AZURE_API_CLIENT_ID=your-backend-client-id
+AZURE_EXPECTED_AUDIENCE=api://your-backend-client-id
+
+CORS_ORIGINS=http://localhost:5173
+SECRET_KEY=development-secret
+Frontend .env
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+
+VITE_AZURE_CLIENT_ID=your-frontend-client-id
+VITE_AZURE_TENANT_ID=your-tenant-id
+VITE_AZURE_REDIRECT_URI=http://localhost:5173
+VITE_AZURE_API_SCOPE=api://your-backend-client-id/access_as_user
+
+Secret bilgiler frontend’e konulmamalıdır. VITE_ ile başlayan değerlerin browser tarafında görülebileceği unutulmamalıdır.
+
+11. Üç haftada yapılmayacak özellikler
+
+Kapsamın yetişmesi için aşağıdakiler sonraki sürüme bırakılmalı:
+
+Mobil uygulama
+Yapay zekâ chatbot
+Kubernetes
+Mikroservis mimarisi
+Gelişmiş SLA motoru
+Teams botu
+Microsoft Graph ile kullanıcı senkronizasyonu
+Gerçek zamanlı WebSocket
+Gelişmiş dosya yönetimi
+Çoklu şirket desteği
+Çoklu dil desteği
+Celery tabanlı görev kuyruğu
+12. Projenin tamamlanma kriterleri
+
+Proje tamamlanmış kabul edilmek için:
+
+Microsoft hesabıyla giriş çalışmalı.
+FastAPI access token’ı doğrulamalı.
+Rol bazlı yetkilendirme uygulanmalı.
+Çalışan talep oluşturabilmeli.
+Destek personeli talebi yönetebilmeli.
+Admin kullanıcı ve kategorileri yönetebilmeli.
+Yorum ve geçmiş sistemi çalışmalı.
+Bildirimler oluşmalı.
+Dashboard metrikleri görünmeli.
+PostgreSQL migration’ları çalışmalı.
+Backend testleri başarılı olmalı.
+Frontend build alınabilmeli.
+Sistem Docker Compose ile ayağa kalkmalı.
+GitHub Actions başarılı çalışmalı.
+README ve deployment dokümanı hazırlanmalı.
+
+
