@@ -9,7 +9,6 @@ export const msalConfig: Configuration = {
     },
     cache: {
         cacheLocation: "sessionStorage", // Token'ların saklanacağı yer
-        storeAuthStateInCookie: false,
     }
 };
 

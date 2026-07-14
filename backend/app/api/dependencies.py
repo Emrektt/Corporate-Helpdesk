@@ -20,9 +20,19 @@ async def get_current_user(
     user = db.query(User).filter(User.email == email).first()
     
     if not user:
-        # Eğer kullanıcı giriş yaptıysa ama sistemde (veritabanında) yoksa hata ver veya yeni oluştur.
-        raise HTTPException(status_code=403, detail="Bu kullanıcının sisteme erişim yetkisi yok")
+        # Sisteme ilk kez giren Microsoft kullanıcısını otomatik kaydet
+        full_name = token_payload.get("name") or email.split("@")[0]
+        oid = token_payload.get("oid")
         
+        user = User(
+            email=email,
+            full_name=full_name,
+            entra_object_id=oid,
+            role=UserRole.EMPLOYEE
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Kullanıcı hesabı pasif durumda")
         

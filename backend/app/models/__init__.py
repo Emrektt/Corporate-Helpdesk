@@ -6,5 +6,8 @@ from app.models.ticket import Ticket, TicketStatus
 from app.models.ticket_comment import TicketComment
 from app.models.ticket_history import TicketHistory, ActionType
 from app.models.notification import Notification
+from app.models.ticket_attachment import TicketAttachment
+from app.models.article import Article
+from app.models.chat import ChatRoom, ChatMessage
 
 # Alembic'in tüm modelleri bulabilmesi için bu dosyayı içe aktarması yeterli olacaktır.

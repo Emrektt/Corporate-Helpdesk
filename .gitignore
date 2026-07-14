@@ -1,0 +1,29 @@
+# Genel
+.DS_Store
+.vscode/
+.idea/
+
+# Backend
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.venv/
+backend/venv/
+backend/env/
+backend/*.pyc
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.eslintcache
+
+# Çevresel Değişkenler
+.env
+.env.*
+backend/.env
+frontend/.env
+!.env.example
+
+# Veritabanı ve Medya (Docker Volume ile yönetilecek, ama lokalde de test ediliyorsa)
+backend/uploads/
+pgdata/
