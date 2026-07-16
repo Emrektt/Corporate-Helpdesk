@@ -14,6 +14,13 @@ export const axiosClient = axios.create({
 // Her istekten önce çalışıp araya (interceptor) girerek header'a MSAL Token ekler
 axiosClient.interceptors.request.use(async (config) => {
     try {
+        // Önce yerel token (e-posta/şifre girişi) var mı diye kontrol et
+        const localToken = localStorage.getItem('token');
+        if (localToken) {
+            config.headers.Authorization = `Bearer ${localToken}`;
+            return config;
+        }
+
         const account = msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
         
         if (account) {

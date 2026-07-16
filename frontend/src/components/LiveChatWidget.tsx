@@ -72,11 +72,18 @@ export const LiveChatWidget: React.FC = () => {
 
     let token = '';
     try {
-      const tokenResponse = await instance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-      });
-      token = tokenResponse.accessToken;
+      // Önce yerel JWT token'ı dene
+      const localToken = localStorage.getItem('token');
+      if (localToken) {
+        token = localToken;
+      } else if (accounts[0]) {
+        // MSAL token'ı dene
+        const tokenResponse = await instance.acquireTokenSilent({
+          ...loginRequest,
+          account: accounts[0],
+        });
+        token = tokenResponse.accessToken;
+      }
     } catch {
       setWsStatus('error');
       return;

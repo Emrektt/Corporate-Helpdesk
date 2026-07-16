@@ -15,7 +15,9 @@ services:
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-helpdesk}
       POSTGRES_USER:     ${POSTGRES_USER:-helpdesk_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SuperSecretPassword123!}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -38,7 +40,7 @@ services:
       POSTGRES_PORT:     5432
       POSTGRES_DB:       ${POSTGRES_DB:-helpdesk}
       POSTGRES_USER:     ${POSTGRES_USER:-helpdesk_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SuperSecretPassword123!}
       TENANT_ID:         ${TENANT_ID:-}
       BACKEND_CLIENT_ID: ${BACKEND_CLIENT_ID:-}
     depends_on:
@@ -66,7 +68,7 @@ services:
     container_name: helpdesk_frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "5173:80"
     depends_on:
       - backend
     networks:

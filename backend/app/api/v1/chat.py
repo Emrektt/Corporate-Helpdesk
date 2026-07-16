@@ -64,10 +64,14 @@ manager = ConnectionManager()
 # ─── Yardımcı Fonksiyonlar ────────────────────────────────────────────────────
 
 def get_user_from_token(token: str, db: Session) -> Optional[User]:
-    """WebSocket için token'dan kullanıcı bilgisi çeker."""
+    """WebSocket için token'dan kullanıcı bilgisi çeker. Hem yerel JWT hem MSAL destekler."""
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        email = payload.get("preferred_username") or payload.get("email")
+        # Önce yerel JWT'deki 'sub' alanına bak (email olarak saklanıyor)
+        email = payload.get("sub")
+        # 'sub' bir email değilse veya yoksa, MSAL alanlarına bak
+        if not email or "@" not in str(email):
+            email = payload.get("preferred_username") or payload.get("email")
         if not email:
             return None
         return db.query(User).filter(User.email == email).first()

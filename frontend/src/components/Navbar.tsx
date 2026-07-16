@@ -26,9 +26,14 @@ export const Navbar: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
-    instance.logoutRedirect({
-      postLogoutRedirectUri: "/",
-    });
+    localStorage.removeItem('token');
+    window.dispatchEvent(new Event('local-login'));
+    const msalAccount = instance.getActiveAccount() || instance.getAllAccounts()[0];
+    if (msalAccount) {
+      instance.logoutRedirect({ postLogoutRedirectUri: '/login' }).catch(console.error);
+    } else {
+      window.location.href = '/login';
+    }
   };
 
   const { data: me } = useQuery({

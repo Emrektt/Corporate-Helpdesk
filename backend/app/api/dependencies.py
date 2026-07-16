@@ -8,21 +8,35 @@ async def get_current_user(
     token_payload: dict = Depends(verify_token),
     db: Session = Depends(get_db)
 ) -> User:
-    """Token içerisindeki kullanıcı email'inden veritabanındaki kullanıcıyı bulur"""
+    """Token içerisindeki kullanıcı bilgisiyle veritabanındaki kullanıcıyı bulur"""
     
-    # MSAL token'ından email bilgisini alıyoruz (oid, preferred_username veya email alanlarında olabilir)
+    oid = token_payload.get("oid")
+    # Yerel token'da email 'sub' içerisindedir. MSAL token'larında 'preferred_username' veya 'email' kullanılır.
     email = token_payload.get("preferred_username") or token_payload.get("email")
-    
-    if not email:
-        raise HTTPException(status_code=401, detail="Token içinde email bilgisi bulunamadı")
+    if not email and "kid" not in token_payload: # 'kid' yoksa yerel token'dır, sub=email demektir.
+        email = token_payload.get("sub")
+        
+    # MSAL Access Token'larında email hiç gelmeyebilir, sadece OID üzerinden kullanıcıyı bulabiliriz.
+    if not email and not oid:
+        raise HTTPException(status_code=401, detail="Token içinde kullanıcı tanımlayıcı bilgi bulunamadı")
 
-    # Veritabanında kullanıcıyı ara
-    user = db.query(User).filter(User.email == email).first()
+    user = None
+    
+    # 1. Öncelik: Microsoft Object ID (OID) ile arama
+    if oid:
+        user = db.query(User).filter(User.entra_object_id == oid).first()
+        
+    # 2. Öncelik: Email ile arama (Yerel kullanıcılar veya OID'si henüz kaydedilmemiş kullanıcılar)
+    if not user and email:
+        user = db.query(User).filter(User.email == email).first()
     
     if not user:
         # Sisteme ilk kez giren Microsoft kullanıcısını otomatik kaydet
+        if not email:
+            # Eğer email claim'i hiç gelmemişse geçici bir email oluştur (veritabanı constraint'i için)
+            email = f"{oid}@msal.local"
+            
         full_name = token_payload.get("name") or email.split("@")[0]
-        oid = token_payload.get("oid")
         
         user = User(
             email=email,
@@ -33,6 +47,7 @@ async def get_current_user(
         db.add(user)
         db.commit()
         db.refresh(user)
+        
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Kullanıcı hesabı pasif durumda")
         

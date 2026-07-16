@@ -57,7 +57,16 @@ export const Sidebar: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
-    instance.logoutRedirect({ postLogoutRedirectUri: '/' }).catch(console.error);
+    // Hem yerel JWT token'ı hem de MSAL oturumunu temizle
+    localStorage.removeItem('token');
+    window.dispatchEvent(new Event('local-login'));
+    // Eğer MSAL oturumu da açıksa onu da kapat, yoksa sadece login'e yönlendir
+    const msalAccount = instance.getActiveAccount() || instance.getAllAccounts()[0];
+    if (msalAccount) {
+      instance.logoutRedirect({ postLogoutRedirectUri: '/login' }).catch(console.error);
+    } else {
+      window.location.href = '/login';
+    }
   };
 
   const handleNotifClick = (n: Notification) => {

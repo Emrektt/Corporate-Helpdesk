@@ -15,6 +15,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     entra_object_id = Column(String, unique=True, index=True, nullable=True) # Microsoft Entra ID
     email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=True) # E-posta/Şifre girişi için
     full_name = Column(String, nullable=False)
     role = Column(Enum(UserRole), default=UserRole.EMPLOYEE, nullable=False)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
