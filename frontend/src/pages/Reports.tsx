@@ -122,7 +122,7 @@ export const Reports: React.FC = () => {
                     ))}
                   </Pie>
                   <RechartsTooltip
-                    formatter={(value: number) => [`${value} Bilet`]}
+                    formatter={(value: number | string | ReadonlyArray<number | string> | undefined) => [`${value ?? 0} Bilet`]}
                     contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-primary)' }}
                   />
                   <Legend iconType="circle" layout="horizontal" verticalAlign="bottom" wrapperStyle={{ fontSize: '0.75rem', color: chartTextColor }} />
