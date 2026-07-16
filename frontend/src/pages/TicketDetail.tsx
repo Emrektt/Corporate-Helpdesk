@@ -65,8 +65,9 @@ export const TicketDetail: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       navigate('/dashboard', { replace: true });
     },
-    onError: (error: any) => {
-      alert(error.response?.data?.detail || "Bilet silinirken bir hata oluştu.");
+    onError: (error: unknown) => {
+      const axiosErr = error as { response?: { data?: { detail?: string } } };
+      alert(axiosErr.response?.data?.detail || "Bilet silinirken bir hata oluştu.");
     }
   });
 

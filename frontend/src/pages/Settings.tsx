@@ -55,8 +55,9 @@ export const Settings: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       if (activeDept) setActiveDept(null);
     },
-    onError: (error: any) => {
-      alert(error.response?.data?.detail || "Silme işlemi başarısız oldu");
+    onError: (error: unknown) => {
+      const axiosErr = error as { response?: { data?: { detail?: string } } };
+      alert(axiosErr.response?.data?.detail || "Silme işlemi başarısız oldu");
     }
   });
 
@@ -75,12 +76,13 @@ export const Settings: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
     },
-    onError: (error: any) => {
-      alert(error.response?.data?.detail || "Silme işlemi başarısız oldu");
+    onError: (error: unknown) => {
+      const axiosErr = error as { response?: { data?: { detail?: string } } };
+      alert(axiosErr.response?.data?.detail || "Silme işlemi başarısız oldu");
     }
   });
 
-  const handleOpenDeptModal = (dept?: any) => {
+  const handleOpenDeptModal = (dept?: { id: number; name: string }) => {
     if (dept) {
       setEditingDeptId(dept.id);
       setDeptName(dept.name);
@@ -217,7 +219,7 @@ export const Settings: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-4">
                 {selectedDepartment?.categories && selectedDepartment.categories.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {selectedDepartment.categories.map((cat: any) => (
+                    {selectedDepartment.categories.map((cat: { id: number; name: string }) => (
                       <div key={cat.id} className="border border-slate-200 rounded-lg p-4 flex items-start justify-between bg-white hover:border-slate-300 transition-colors shadow-sm">
                         <div>
                           <h4 className="font-medium text-slate-900">{cat.name}</h4>

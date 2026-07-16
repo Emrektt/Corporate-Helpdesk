@@ -35,8 +35,9 @@ export const Login: React.FC = () => {
                 window.dispatchEvent(new Event('local-login'));
                 navigate('/dashboard');
             }
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Giriş yapılamadı. E-posta veya şifre hatalı olabilir.');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { detail?: string } } };
+            setError(axiosErr.response?.data?.detail || 'Giriş yapılamadı. E-posta veya şifre hatalı olabilir.');
         } finally {
             setLoading(false);
         }

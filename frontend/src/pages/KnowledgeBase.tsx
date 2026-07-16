@@ -21,10 +21,18 @@ export const KnowledgeBase: React.FC = () => {
   const { data: articles, isLoading } = useQuery({ queryKey: ['articles', selectedDept], queryFn: () => getArticles(selectedDept) });
 
   const createMutation = useMutation({ mutationFn: createArticle, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['articles'] }); setIsEditing(false); } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateMutation = useMutation({ mutationFn: (d: any) => updateArticle(d.id, d), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['articles'] }); setIsEditing(false); setViewArticle(null); } });
   const deleteMutation = useMutation({ mutationFn: deleteArticle, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['articles'] }); setViewArticle(null); } });
 
-  const handleSave = (e: React.FormEvent) => { e.preventDefault(); editForm.id ? updateMutation.mutate(editForm) : createMutation.mutate(editForm); };
+  const handleSave = (e: React.FormEvent) => { 
+    e.preventDefault(); 
+    if (editForm.id) {
+      updateMutation.mutate(editForm);
+    } else {
+      createMutation.mutate(editForm);
+    }
+  };
   const handleEdit = (a: Article) => { setEditForm({ id: a.id, title: a.title, content: a.content, department_id: a.department_id, is_published: a.is_published }); setIsEditing(true); setViewArticle(null); };
   const isStaff = me?.role === 'ADMIN' || me?.role === 'SUPPORT_AGENT';
   const filtered = articles?.filter(a => a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.content.toLowerCase().includes(searchQuery.toLowerCase()));
