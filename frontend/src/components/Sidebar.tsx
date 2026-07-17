@@ -19,9 +19,19 @@ export const Sidebar: React.FC = () => {
   const { isDark, toggleTheme } = useTheme();
   const queryClient = useQueryClient();
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(window.innerWidth < 1024);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setCollapsed(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
   const { data: notifications } = useQuery({

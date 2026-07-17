@@ -27,16 +27,9 @@ const queryClient = new QueryClient({
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
-      <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-app)' }}>
+      <div className="flex min-h-screen bg-[var(--bg-app)]">
         <Sidebar />
-        <main style={{
-          flex: 1,
-          minWidth: 0,
-          padding: '32px 28px',
-          transition: 'all 0.25s ease',
-          background: 'var(--bg-app)',
-          color: 'var(--text-primary)',
-        }}>
+        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 transition-all duration-250 ease-in-out text-[var(--text-primary)] bg-[var(--bg-app)]">
           {children}
         </main>
       </div>

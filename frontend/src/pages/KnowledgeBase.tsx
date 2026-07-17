@@ -38,10 +38,10 @@ export const KnowledgeBase: React.FC = () => {
   const filtered = articles?.filter(a => a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.content.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', gap: '24px', alignItems: 'flex-start' }} className="animate-fade-in">
+    <div className="animate-fade-in flex flex-col lg:flex-row items-start gap-6 max-w-[1100px] mx-auto w-full">
 
       {/* Sidebar */}
-      <div className="card" style={{ width: '220px', flexShrink: 0, padding: '20px', position: 'sticky', top: '20px' }}>
+      <div className="card w-full lg:w-[220px] flex-shrink-0 p-5 lg:sticky lg:top-5 relative">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
           <BookOpen size={16} color="var(--accent)" />
           <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>Bilgi Bankası</span>
@@ -70,7 +70,7 @@ export const KnowledgeBase: React.FC = () => {
       </div>
 
       {/* Main */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="flex-1 min-w-0 w-full">
         {isEditing ? (
           <div className="card" style={{ padding: '28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
@@ -102,8 +102,8 @@ export const KnowledgeBase: React.FC = () => {
             <button onClick={() => setViewArticle(null)} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500, marginBottom: '20px' }}>
               <ArrowLeft size={15} /> Listeye Dön
             </button>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid var(--border)' }}>
-              <div>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5 pb-5 border-b border-[var(--border)]">
+              <div className="min-w-0">
                 <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '1.375rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>{viewArticle.title}</h1>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   <span className="badge" style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}>{viewArticle.department.name}</span>
@@ -123,7 +123,7 @@ export const KnowledgeBase: React.FC = () => {
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-5">
               <div>
                 <h1 className="page-title">Makaleler</h1>
                 <p className="page-subtitle">Sık karşılaşılan sorunlar ve çözümleri.</p>

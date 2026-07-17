@@ -81,9 +81,9 @@ export const Reports: React.FC = () => {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Trend Chart */}
-        <div className="card" style={{ padding: '24px' }}>
+        <div className="card xl:col-span-2" style={{ padding: '24px' }}>
           <h3 style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: '20px' }}>Son 30 Günlük Bilet Trendi</h3>
           <div style={{ height: '280px' }}>
             {formattedTrend.length > 0 ? (
