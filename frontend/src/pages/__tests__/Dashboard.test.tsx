@@ -26,7 +26,7 @@ vi.mock('../../api/ticket-service', () => ({
     limit: 10,
     items: [
       {
-        id: 1,
+        id: 123,
         ticket_number: 'TK-123',
         title: 'Login Issue',
         status: 'Açık',
