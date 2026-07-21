@@ -58,6 +58,6 @@ describe('Dashboard', () => {
     expect(await screen.findByText('15', {}, { timeout: 4000 })).toBeInTheDocument(); // total tickets
     expect(screen.getByText('5')).toBeInTheDocument(); // open tickets
     expect(screen.getByText('10')).toBeInTheDocument(); // resolved tickets
-    expect(screen.getByText('TK-123')).toBeInTheDocument(); // ticket row
+    expect(screen.getByText('#123')).toBeInTheDocument(); // ticket row
   });
 });

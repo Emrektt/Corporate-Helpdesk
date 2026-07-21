@@ -12,7 +12,7 @@ vi.mock('../../context/ThemeContext', () => ({
 }));
 
 vi.mock('../../context/AdminModeContext', () => ({
-  useAdminMode: () => ({ isAdminMode: false, toggleAdminMode: vi.fn() })
+  useAdminMode: vi.fn().mockReturnValue({ isAdminMode: false, toggleAdminMode: vi.fn() })
 }));
 
 vi.mock('@tanstack/react-query', () => ({
