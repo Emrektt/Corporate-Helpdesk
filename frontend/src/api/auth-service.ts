@@ -13,3 +13,8 @@ export const getMe = async (): Promise<UserProfile> => {
     const response = await axiosClient.get("/api/v1/auth/me");
     return response.data;
 };
+
+export const testLogin = async (email: string): Promise<{access_token: string}> => {
+    const response = await axiosClient.post("/api/v1/auth/login", { email });
+    return response.data;
+};

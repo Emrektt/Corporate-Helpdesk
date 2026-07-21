@@ -3,8 +3,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.core.database import get_db
-from app.api.v1 import auth, departments, tickets, analytics, notifications, articles, chat
+from app.core.database import get_db, SessionLocal
+from app.api.v1 import auth, departments, tickets, analytics, notifications, articles, chat, events, canned_responses, users
+from app.models.event import EventLog
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+import traceback
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -19,12 +23,39 @@ app.add_middleware(
 
 # Router'ları ekle
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(departments.router, prefix="/api/v1/departments", tags=["Departments"])
 app.include_router(tickets.router, prefix="/api/v1/tickets", tags=["Tickets"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(articles.router, prefix="/api/v1/articles", tags=["Knowledge Base"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Live Chat"])
+app.include_router(events.router, prefix="/api/v1/events", tags=["System Events"])
+app.include_router(canned_responses.router, prefix="/api/v1/canned-responses", tags=["Canned Responses"])
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    db = SessionLocal()
+    try:
+        error_msg = str(exc)
+        tb_str = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        event = EventLog(
+            level="ERROR",
+            source="BACKEND",
+            message=error_msg,
+            stack_trace=tb_str
+        )
+        db.add(event)
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+        
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Sunucu içinde beklenmeyen bir hata oluştu."}
+    )
 
 
 @app.get("/api/health")

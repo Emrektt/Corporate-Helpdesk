@@ -1,47 +1,23 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '../auth/msal-config';
-import { axiosClient } from '../api/axios-client';
-import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
+import { LogIn, AlertCircle } from 'lucide-react';
 import { useIsAuthenticated } from '@azure/msal-react';
 
 export const Login: React.FC = () => {
     const navigate = useNavigate();
     const { instance, inProgress } = useMsal();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [email, setEmail] = useState('');
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
     const isMsalAuthenticated = useIsAuthenticated();
     const isLocalAuthenticated = !!localStorage.getItem('token');
-
     React.useEffect(() => {
         if (isMsalAuthenticated || isLocalAuthenticated) {
             navigate('/dashboard', { replace: true });
         }
     }, [isMsalAuthenticated, isLocalAuthenticated, navigate]);
-
-    const handleLocalLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            const res = await axiosClient.post('/api/v1/auth/login', { email, password });
-            if (res.data.access_token) {
-                localStorage.setItem('token', res.data.access_token);
-                // Dispatch custom event to tell ProtectedRoute to re-check
-                window.dispatchEvent(new Event('local-login'));
-                navigate('/dashboard');
-            }
-        } catch (err: unknown) {
-            const axiosErr = err as { response?: { data?: { detail?: string } } };
-            setError(axiosErr.response?.data?.detail || 'Giriş yapılamadı. E-posta veya şifre hatalı olabilir.');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleMicrosoftLogin = () => {
         if (inProgress === 'none') {
@@ -49,6 +25,24 @@ export const Login: React.FC = () => {
                 console.error("Giriş sırasında hata:", e);
                 setError("Microsoft ile giriş başarısız oldu.");
             });
+        }
+    };
+
+    const handleTestLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!email) return setError('Lütfen bir e-posta adresi girin.');
+        
+        try {
+            setIsLoggingIn(true);
+            setError('');
+            const { testLogin } = await import('../api/auth-service');
+            const res = await testLogin(email);
+            localStorage.setItem('token', res.access_token);
+            window.location.href = '/dashboard';
+        } catch (err: any) {
+            setError(err.response?.data?.detail || 'Giriş başarısız.');
+        } finally {
+            setIsLoggingIn(false);
         }
     };
 
@@ -71,54 +65,6 @@ export const Login: React.FC = () => {
                     </div>
                 )}
 
-                <form onSubmit={handleLocalLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>E-posta Adresi</label>
-                        <div style={{ position: 'relative' }}>
-                            <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
-                                <Mail size={18} />
-                            </div>
-                            <input 
-                                type="email" 
-                                className="input-field" 
-                                style={{ paddingLeft: '40px' }} 
-                                placeholder="ornek@sirket.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required 
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Şifre</label>
-                        <div style={{ position: 'relative' }}>
-                            <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
-                                <Lock size={18} />
-                            </div>
-                            <input 
-                                type="password" 
-                                className="input-field" 
-                                style={{ paddingLeft: '40px' }} 
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required 
-                            />
-                        </div>
-                    </div>
-
-                    <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }} disabled={loading}>
-                        {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
-                    </button>
-                </form>
-
-                <div style={{ display: 'flex', alignItems: 'center', margin: '8px 0' }}>
-                    <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
-                    <span style={{ padding: '0 12px', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>VEYA</span>
-                    <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
-                </div>
-
                 <button 
                     onClick={handleMicrosoftLogin}
                     disabled={inProgress !== 'none'}
@@ -140,9 +86,38 @@ export const Login: React.FC = () => {
                     Microsoft ile Giriş Yap
                 </button>
 
-                <div style={{ textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    Hesabınız yok mu? <Link to="/register" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>Kayıt Ol</Link>
+                <div style={{ display: 'flex', alignItems: 'center', margin: '10px 0' }}>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                    <div style={{ padding: '0 10px', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>VEYA (Test)</div>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
                 </div>
+
+                <form onSubmit={handleTestLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <input 
+                        type="email" 
+                        placeholder="E-posta adresi (örn: emreeken486@gmail.com)" 
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        style={{
+                            width: '100%', padding: '10px 12px', borderRadius: '8px',
+                            background: 'var(--bg-app)', border: '1px solid var(--border)',
+                            color: 'var(--text-primary)', outline: 'none'
+                        }}
+                    />
+                    <button 
+                        type="submit"
+                        disabled={isLoggingIn}
+                        style={{ 
+                            width: '100%', padding: '10px 16px', borderRadius: '8px', 
+                            background: 'var(--accent)', color: 'white', fontWeight: 600,
+                            border: 'none', cursor: 'pointer', transition: 'all 0.2s ease',
+                            opacity: isLoggingIn ? 0.7 : 1
+                        }}
+                    >
+                        {isLoggingIn ? 'Giriş Yapılıyor...' : 'Test Girişi Yap'}
+                    </button>
+                </form>
+
             </div>
         </div>
     );

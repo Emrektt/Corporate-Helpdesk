@@ -18,6 +18,8 @@ class AnalyticsSummary(BaseModel):
     in_progress_tickets: int
     resolved_tickets: int
     closed_tickets: int
+    avg_csat_score: float | None
+    sla_breached_count: int
 
 class DepartmentDistribution(BaseModel):
     name: str
@@ -30,24 +32,45 @@ class DailyTrend(BaseModel):
 
 @router.get("/summary", response_model=AnalyticsSummary)
 def get_analytics_summary(
+    as_user: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=403, detail="Bu verilere erişim yetkiniz yok")
+    query = db.query(Ticket)
+    if as_user:
+        query = query.filter(Ticket.created_by_id == current_user.id)
 
-    total = db.query(Ticket).count()
-    open_count = db.query(Ticket).filter(Ticket.status == TicketStatus.OPEN).count()
-    in_progress = db.query(Ticket).filter(Ticket.status == TicketStatus.IN_PROGRESS).count()
-    resolved = db.query(Ticket).filter(Ticket.status == TicketStatus.RESOLVED).count()
-    closed = db.query(Ticket).filter(Ticket.status == TicketStatus.CLOSED).count()
+    total = query.count()
+    open_count = query.filter(Ticket.status == TicketStatus.OPEN).count()
+    in_progress = query.filter(Ticket.status == TicketStatus.IN_PROGRESS).count()
+    resolved = query.filter(Ticket.status == TicketStatus.RESOLVED).count()
+    closed = query.filter(Ticket.status == TicketStatus.CLOSED).count()
+
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+
+    # CSAT ortalaması
+    csat_result = query.with_entities(func.avg(Ticket.csat_score)).filter(Ticket.csat_score != None).scalar()
+    avg_csat = round(float(csat_result), 2) if csat_result else None
+
+    # SLA ihlali sayısı (aktif biletler için)
+    from sqlalchemy import and_
+    sla_breached = query.filter(
+        and_(
+            Ticket.due_at != None,
+            Ticket.due_at < now,
+            Ticket.status.notin_([TicketStatus.RESOLVED, TicketStatus.CLOSED])
+        )
+    ).count()
 
     return AnalyticsSummary(
         total_tickets=total,
         open_tickets=open_count,
         in_progress_tickets=in_progress,
         resolved_tickets=resolved,
-        closed_tickets=closed
+        closed_tickets=closed,
+        avg_csat_score=avg_csat,
+        sla_breached_count=sla_breached
     )
 
 @router.get("/departments", response_model=List[DepartmentDistribution])
@@ -55,9 +78,7 @@ def get_department_distribution(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=403, detail="Bu verilere erişim yetkiniz yok")
-
+    # Herkes analytics görebilir
     results = (
         db.query(Department.name, func.count(Ticket.id))
         .outerjoin(Ticket, Ticket.department_id == Department.id)
@@ -72,9 +93,7 @@ def get_ticket_trend(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=403, detail="Bu verilere erişim yetkiniz yok")
-
+    # Herkes analytics görebilir
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     
     # Tüm biletleri çekip Python'da gruplamak (SQLite uyumluluğu için en güvenlisi)

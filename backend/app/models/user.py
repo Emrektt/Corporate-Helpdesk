@@ -6,8 +6,13 @@ from app.core.database import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
+    BACKEND_DEV = "BACKEND_DEV"
+    FRONTEND_DEV = "FRONTEND_DEV"
+    SCRUM_MASTER = "SCRUM_MASTER"
+    TESTER = "TESTER"
+    DEVOPS = "DEVOPS"
+    PRODUCT_OWNER = "PRODUCT_OWNER"
     SUPPORT_AGENT = "SUPPORT_AGENT"
-    EMPLOYEE = "EMPLOYEE"
 
 class User(Base):
     __tablename__ = "users"
@@ -15,9 +20,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     entra_object_id = Column(String, unique=True, index=True, nullable=True) # Microsoft Entra ID
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=True) # E-posta/Şifre girişi için
     full_name = Column(String, nullable=False)
-    role = Column(Enum(UserRole), default=UserRole.EMPLOYEE, nullable=False)
+    role = Column(Enum(UserRole), default=UserRole.BACKEND_DEV, nullable=False)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

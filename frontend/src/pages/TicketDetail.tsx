@@ -1,62 +1,210 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTicket, getComments, addComment, updateTicketStatus, uploadAttachment, deleteTicket, Ticket } from '../api/ticket-service';
+import {
+  getTicket, getComments, addComment, updateTicketStatus,
+  uploadAttachment, deleteTicket, getSLAStatus, submitCSAT, Ticket
+} from '../api/ticket-service';
+import { getCannedResponses } from '../api/canned-response-service';
 import { getMe } from '../api/auth-service';
-import { ArrowLeft, Clock, MessageSquare, AlertCircle, RefreshCw, CheckCircle, Send, Paperclip, Download, FileText } from 'lucide-react';
+import {
+  ArrowLeft, Clock, MessageSquare, AlertCircle,
+  CheckCircle, Send, Paperclip, Download, FileText,
+  Star, BookOpen, Search, X, ShieldAlert, CheckCircle2, Timer
+} from 'lucide-react';
+import { useAdminMode } from '../context/AdminModeContext';
 
+// ── SLA Badge ────────────────────────────────────────────────────────────────
+const SLABadge: React.FC<{ ticketId: number }> = ({ ticketId }) => {
+  const { data: sla } = useQuery({
+    queryKey: ['sla', ticketId],
+    queryFn: () => getSLAStatus(ticketId),
+    refetchInterval: 60_000,
+  });
+
+  if (!sla?.has_sla) return null;
+
+  const colorMap = {
+    ok: { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', text: '#059669', icon: <Timer size={13} /> },
+    warning: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)', text: '#d97706', icon: <AlertCircle size={13} /> },
+    breached: { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)', text: '#dc2626', icon: <ShieldAlert size={13} /> },
+    resolved: { bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.3)', text: '#6366f1', icon: <CheckCircle2 size={13} /> },
+  };
+  const c = colorMap[sla.status ?? 'ok'];
+
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: '6px',
+      padding: '5px 10px', borderRadius: '8px',
+      background: c.bg, border: `1px solid ${c.border}`, color: c.text,
+      fontSize: '0.78rem', fontWeight: 600,
+    }}>
+      {c.icon}
+      SLA: {sla.status === 'resolved' ? 'Çözüldü' : sla.remaining_label}
+      {sla.is_breached && ' ⚠️'}
+    </div>
+  );
+};
+
+// ── Star Rating (CSAT) ───────────────────────────────────────────────────────
+const StarRating: React.FC<{ value: number; onChange: (v: number) => void; readOnly?: boolean }> = ({ value, onChange, readOnly }) => {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div style={{ display: 'flex', gap: '4px' }}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <button
+          key={n}
+          onClick={() => !readOnly && onChange(n)}
+          onMouseEnter={() => !readOnly && setHovered(n)}
+          onMouseLeave={() => !readOnly && setHovered(0)}
+          style={{
+            background: 'none', border: 'none', cursor: readOnly ? 'default' : 'pointer',
+            padding: '2px', transition: 'transform 0.1s',
+            transform: (hovered || value) >= n ? 'scale(1.2)' : 'scale(1)',
+          }}
+        >
+          <Star
+            size={28}
+            fill={(hovered || value) >= n ? '#f59e0b' : 'none'}
+            color={(hovered || value) >= n ? '#f59e0b' : 'var(--border)'}
+          />
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// ── Canned Response Picker ───────────────────────────────────────────────────
+const CannedResponsePicker: React.FC<{ onSelect: (content: string) => void; onClose: () => void }> = ({ onSelect, onClose }) => {
+  const [search, setSearch] = useState('');
+  const { data: responses = [] } = useQuery({
+    queryKey: ['canned-responses', search],
+    queryFn: () => getCannedResponses(search || undefined),
+  });
+
+  return (
+    <div style={{
+      position: 'absolute', bottom: '110%', left: 0, right: 0, zIndex: 50,
+      background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: '12px', boxShadow: 'var(--shadow-lg)',
+      overflow: 'hidden', animation: 'fadeIn 0.15s ease-out',
+    }}>
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <Search size={14} color="var(--text-muted)" />
+        <input
+          autoFocus
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Şablon ara..."
+          style={{
+            flex: 1, border: 'none', background: 'none', outline: 'none',
+            fontSize: '0.875rem', color: 'var(--text-primary)',
+          }}
+        />
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+          <X size={14} />
+        </button>
+      </div>
+      <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+        {responses.length === 0 ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Şablon bulunamadı
+          </div>
+        ) : (
+          responses.map(r => (
+            <button
+              key={r.id}
+              onClick={() => { onSelect(r.content); onClose(); }}
+              style={{
+                width: '100%', textAlign: 'left', padding: '10px 14px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                borderBottom: '1px solid var(--border)',
+                transition: 'background 0.1s ease',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-muted)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              <div style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{r.title}</div>
+              {r.category && (
+                <div style={{ fontSize: '0.7rem', color: 'var(--accent)', marginTop: '1px' }}>{r.category}</div>
+              )}
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.content}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export const TicketDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const ticketId = Number(id);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { isAdminMode } = useAdminMode();
+
   const [commentText, setCommentText] = useState('');
   const [isInternal, setIsInternal] = useState(false);
+  const [showCannedPicker, setShowCannedPicker] = useState(false);
+  const [csatScore, setCsatScore] = useState(0);
+  const [csatComment, setCsatComment] = useState('');
+  const [csatSubmitted, setCsatSubmitted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Verileri Çek
-  const { data: me } = useQuery({
-    queryKey: ['me'],
-    queryFn: getMe
-  });
-
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
   const { data: ticket, isLoading: isTicketLoading, isError } = useQuery<Ticket>({
     queryKey: ['ticket', ticketId],
     queryFn: () => getTicket(ticketId),
     enabled: !!ticketId
   });
-
   const { data: comments, isLoading: isCommentsLoading } = useQuery({
     queryKey: ['comments', ticketId],
     queryFn: () => getComments(ticketId),
     enabled: !!ticketId
   });
 
-  // Yorum Ekleme Mutasyonu
+  // Mark CSAT as already submitted if ticket has score
+  useEffect(() => {
+    if (ticket?.csat_score !== null && ticket?.csat_score !== undefined) {
+      setCsatSubmitted(true);
+      setCsatScore(ticket.csat_score);
+    }
+  }, [ticket]);
+
+  // If in user mode and trying to view someone else's ticket, kick them out
+  const isTicketOwner = me?.id === ticket?.created_by_id;
+  useEffect(() => {
+    if (ticket && me && !isAdminMode && !isTicketOwner) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [ticket, me, isAdminMode, isTicketOwner, navigate]);
+
   const addCommentMutation = useMutation({
-    mutationFn: ({ content, isInternal }: { content: string, isInternal: boolean }) => addComment(ticketId, content, isInternal),
+    mutationFn: ({ content, isInternal }: { content: string; isInternal: boolean }) =>
+      addComment(ticketId, content, isInternal),
     onSuccess: () => {
       setCommentText('');
       setIsInternal(false);
       queryClient.invalidateQueries({ queryKey: ['comments', ticketId] });
-    }
+    },
   });
 
-  // Dosya Yükleme Mutasyonu
   const uploadAttachmentMutation = useMutation({
     mutationFn: (file: File) => uploadAttachment(ticketId, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
-    }
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] }),
   });
 
-  // Durum Güncelleme Mutasyonu
   const updateStatusMutation = useMutation({
     mutationFn: (status: string) => updateTicketStatus(ticketId, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
-    }
+      queryClient.invalidateQueries({ queryKey: ['sla', ticketId] });
+    },
   });
 
   const deleteTicketMutation = useMutation({
@@ -67,15 +215,17 @@ export const TicketDetail: React.FC = () => {
     },
     onError: (error: unknown) => {
       const axiosErr = error as { response?: { data?: { detail?: string } } };
-      alert(axiosErr.response?.data?.detail || "Bilet silinirken bir hata oluştu.");
-    }
+      alert(axiosErr.response?.data?.detail || 'Bilet silinirken bir hata oluştu.');
+    },
   });
 
-  const handleDeleteTicket = () => {
-    if (window.confirm('Bu bileti kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz!')) {
-      deleteTicketMutation.mutate();
-    }
-  };
+  const csatMutation = useMutation({
+    mutationFn: () => submitCSAT(ticketId, csatScore, csatComment),
+    onSuccess: () => {
+      setCsatSubmitted(true);
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+    },
+  });
 
   const handleSendComment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,174 +239,201 @@ export const TicketDetail: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      uploadAttachmentMutation.mutate(file);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''; // Input'u temizle
+    if (file) uploadAttachmentMutation.mutate(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDeleteTicket = () => {
+    if (window.confirm('Bu bileti kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz!')) {
+      deleteTicketMutation.mutate();
     }
   };
 
-  // Duruma göre etiketler
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"><AlertCircle className="w-4 h-4 mr-1.5" /> Açık</span>;
-      case 'IN_PROGRESS':
-        return <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800"><RefreshCw className="w-4 h-4 mr-1.5" /> İşlemde</span>;
-      case 'RESOLVED':
-        return <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800"><CheckCircle className="w-4 h-4 mr-1.5" /> Çözüldü</span>;
-      case 'CLOSED':
-        return <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-800">Kapatıldı</span>;
-      default:
-        return <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">{status}</span>;
-    }
+    const map: Record<string, { label: string; cls: string }> = {
+      OPEN: { label: 'Açık', cls: 'badge badge-open' },
+      IN_PROGRESS: { label: 'İşlemde', cls: 'badge badge-progress' },
+      RESOLVED: { label: 'Çözüldü', cls: 'badge badge-resolved' },
+      CLOSED: { label: 'Kapatıldı', cls: 'badge badge-closed' },
+      ASSIGNED: { label: 'Atandı', cls: 'badge badge-progress' },
+      WAITING_FOR_USER: { label: 'Kullanıcı Bekleniyor', cls: 'badge badge-medium' },
+      CANCELLED: { label: 'İptal', cls: 'badge badge-closed' },
+    };
+    const m = map[status];
+    return m ? <span className={m.cls}>{m.label}</span> : <span className="badge">{status}</span>;
   };
 
   if (isTicketLoading) {
     return (
-      <div className="flex justify-center items-center h-[calc(100vh-4rem)]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
       </div>
     );
   }
 
   if (isError || !ticket) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center">
-          <AlertCircle className="w-5 h-5 mr-2" />
-          Bilet detayları yüklenemedi veya bu bileti görüntüleme yetkiniz yok.
+      <div style={{ maxWidth: '800px', margin: '32px auto', padding: '0 20px' }}>
+        <div className="card" style={{ padding: '24px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertCircle size={18} /> Bilet detayları yüklenemedi.
         </div>
-        <Link to="/dashboard" className="mt-4 inline-flex items-center text-blue-600 hover:text-blue-800">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Dashboard'a Dön
+        <Link to="/dashboard" style={{ marginTop: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', textDecoration: 'none', fontSize: '0.875rem' }}>
+          <ArrowLeft size={15} /> Dashboard'a Dön
         </Link>
       </div>
     );
   }
 
-  const isSupportOrAdmin = me?.role === 'SUPPORT_AGENT' || me?.role === 'ADMIN';
+  const isSupportOrAdmin = isAdminMode && (me?.role === 'ADMIN' || me?.role === 'SUPPORT_AGENT');
+  const showCSAT = isTicketOwner && (ticket.status === 'RESOLVED' || ticket.status === 'CLOSED');
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Üst Kısım: Geri Dön ve Bilet Numarası */}
-      <div className="mb-6">
-        <Link to="/dashboard" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors mb-4">
-          <ArrowLeft className="w-4 h-4 mr-1.5" />
-          Taleplere Dön
+    <div style={{ maxWidth: '1100px', margin: '0 auto' }} className="animate-fade-in">
+
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <Link to="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.875rem', marginBottom: '12px' }}>
+          <ArrowLeft size={15} /> Taleplere Dön
         </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <span className="text-blue-600">{ticket.ticket_number}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h1 className="page-title" style={{ margin: 0 }}>
+            <span style={{ color: 'var(--accent)' }}>{ticket.ticket_number}</span>
           </h1>
-          <div>
-            {getStatusBadge(ticket.status)}
-          </div>
+          {getStatusBadge(ticket.status)}
+          <SLABadge ticketId={ticketId} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Sol Kısım: Bilet Detayları ve Yorumlar */}
-        <div className="md:col-span-2 space-y-6">
-          <div className="bg-white shadow-sm ring-1 ring-slate-200 rounded-xl p-6">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">{ticket.title}</h2>
-            <div className="prose max-w-none text-slate-600 mb-6">
-              <p className="whitespace-pre-wrap">{ticket.description}</p>
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', alignItems: 'start' }}>
 
-            {/* Ekli Dosyalar Alanı */}
-            <div className="border-t border-slate-100 pt-4 mt-6">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                <Paperclip className="w-4 h-4 text-slate-400" /> Ekler ({ticket.attachments?.length || 0})
+        {/* Left: Detail + Comments */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Ticket Info */}
+          <div className="card" style={{ padding: '24px' }}>
+            <h2 style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-primary)', marginBottom: '12px' }}>{ticket.title}</h2>
+            <p style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: '0.9rem' }}>{ticket.description}</p>
+
+            {/* Attachments */}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '20px' }}>
+              <h3 style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Paperclip size={14} /> Ekler ({ticket.attachments?.length || 0})
               </h3>
-              
-              {ticket.attachments && ticket.attachments.length > 0 && (
-                <ul className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
-                  {ticket.attachments.map((attachment) => (
-                    <li key={attachment.id} className="flex items-center justify-between py-3 pl-3 pr-4 text-sm hover:bg-slate-50 transition-colors">
-                      <div className="flex w-0 flex-1 items-center gap-2">
-                        <FileText className="w-5 h-5 flex-shrink-0 text-slate-400" />
-                        <span className="truncate font-medium text-slate-600">{attachment.file_name}</span>
-                        <span className="text-xs text-slate-400">({Math.round(attachment.size / 1024)} KB)</span>
+              {ticket.attachments?.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {ticket.attachments.map(att => (
+                    <div key={att.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-muted)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                        <FileText size={14} color="var(--text-muted)" />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.file_name}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}>({Math.round(att.size / 1024)} KB)</span>
                       </div>
-                      <div className="ml-4 flex-shrink-0">
-                        <a 
-                          href={`http://localhost:8001/api/v1/tickets/${ticket.id}/attachments/${attachment.id}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="font-medium text-blue-600 hover:text-blue-500 inline-flex items-center gap-1"
-                        >
-                          <Download className="w-4 h-4" /> İndir
-                        </a>
-                      </div>
-                    </li>
+                      <a href={`http://localhost:8001/api/v1/tickets/${ticket.id}/attachments/${att.id}`} target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent)', fontSize: '0.78rem', textDecoration: 'none', fontWeight: 500, flexShrink: 0 }}>
+                        <Download size={13} /> İndir
+                      </a>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
-
-              {/* Dosya Yükleme Butonu */}
               {ticket.status !== 'CLOSED' && (
-                <div className="mt-4">
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange}
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadAttachmentMutation.isPending}
-                    className="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {uploadAttachmentMutation.isPending ? (
-                      <span className="flex items-center"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-600 mr-2"></div> Yükleniyor...</span>
-                    ) : (
-                      <span className="flex items-center"><Paperclip className="w-4 h-4 mr-2" /> Dosya Ekle</span>
-                    )}
+                <div style={{ marginTop: '10px' }}>
+                  <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
+                  <button onClick={() => fileInputRef.current?.click()} disabled={uploadAttachmentMutation.isPending}
+                    className="btn-ghost" style={{ fontSize: '0.8rem' }}>
+                    <Paperclip size={14} /> {uploadAttachmentMutation.isPending ? 'Yükleniyor...' : 'Dosya Ekle'}
                   </button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Yorumlar Alanı (Chat Arayüzü) */}
-          <div className="bg-white shadow-sm ring-1 ring-slate-200 rounded-xl p-6 flex flex-col h-[500px]">
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b pb-3">
-              <MessageSquare className="w-5 h-5 text-blue-600" /> Mesajlar
-            </h3>
-            
-            {/* Mesaj Listesi */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2 mb-4">
-              {isCommentsLoading ? (
-                <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>
-              ) : comments?.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  <p>Henüz bir mesaj bulunmuyor.</p>
+          {/* CSAT Card */}
+          {showCSAT && (
+            <div className="card" style={{ padding: '24px', border: csatSubmitted ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(245,158,11,0.3)', background: csatSubmitted ? 'rgba(16,185,129,0.05)' : 'rgba(245,158,11,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                <Star size={18} color={csatSubmitted ? '#10b981' : '#f59e0b'} fill={csatSubmitted ? '#10b981' : '#f59e0b'} />
+                <h3 style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', margin: 0 }}>
+                  {csatSubmitted ? 'Değerlendirmeniz Alındı' : 'Talebinizi Değerlendirin'}
+                </h3>
+              </div>
+              {csatSubmitted ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <StarRating value={csatScore} onChange={() => {}} readOnly />
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Teşekkürler! {csatScore}/5 yıldız verdiniz.</span>
                 </div>
               ) : (
-                comments?.map((comment) => {
-                  const isMine = comment.user.id === me?.id;
-                  const isInternalNote = comment.is_internal;
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 }}>
+                    Bu destek deneyiminizi nasıl buldunuz?
+                  </p>
+                  <StarRating value={csatScore} onChange={setCsatScore} />
+                  <textarea
+                    placeholder="İsteğe bağlı yorum ekleyin..."
+                    value={csatComment}
+                    onChange={e => setCsatComment(e.target.value)}
+                    className="input-field"
+                    rows={2}
+                    style={{ resize: 'none', fontSize: '0.875rem' }}
+                  />
+                  <button
+                    onClick={() => csatMutation.mutate()}
+                    disabled={csatScore === 0 || csatMutation.isPending}
+                    className="btn-primary"
+                    style={{ alignSelf: 'flex-start', fontSize: '0.875rem' }}
+                  >
+                    <CheckCircle size={15} />
+                    {csatMutation.isPending ? 'Kaydediliyor...' : 'Değerlendirmeyi Gönder'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
+          {/* Comments */}
+          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+              <MessageSquare size={16} color="var(--accent)" /> Mesajlar
+            </h3>
+            <div style={{ maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px', marginBottom: '16px' }}>
+              {isCommentsLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '24px' }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+                </div>
+              ) : comments?.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                  <MessageSquare size={28} style={{ margin: '0 auto 8px', opacity: 0.3 }} />
+                  Henüz mesaj yok.
+                </div>
+              ) : (
+                comments?.map(comment => {
+                  const isMine = comment.user.id === me?.id;
                   return (
-                    <div key={comment.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                      <div className="flex items-baseline gap-2 mb-1 px-1">
-                        <span className="text-xs font-semibold text-slate-600">{isMine ? 'Siz' : comment.user.full_name}</span>
-                        {isInternalNote && <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-medium border border-amber-200">🔒 İç Yazışma</span>}
-                        {!isMine && !isInternalNote && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{comment.user.role === 'SUPPORT_AGENT' ? 'Destek' : 'Kullanıcı'}</span>}
-                        <span className="text-[10px] text-slate-400">
+                    <div key={comment.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', padding: '0 4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{isMine ? 'Siz' : comment.user.full_name}</span>
+                        {comment.is_internal && (
+                          <span style={{ fontSize: '0.65rem', color: '#92400e', background: 'rgba(245,158,11,0.15)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>🔒 İç Yazışma</span>
+                        )}
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
                           {new Date(comment.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <div className={`px-4 py-2.5 max-w-[85%] ${
-                        isInternalNote
-                          ? 'bg-amber-50 text-amber-900 border border-amber-200 rounded-2xl rounded-bl-none'
-                          : isMine 
-                            ? 'bg-blue-600 text-white rounded-2xl rounded-br-none' 
-                            : 'bg-slate-100 text-slate-800 rounded-2xl rounded-bl-none'
-                      }`}>
-                        <p className="whitespace-pre-wrap text-sm">{comment.message}</p>
+                      <div style={{
+                        padding: '10px 14px', maxWidth: '80%', borderRadius: '14px',
+                        borderBottomRightRadius: isMine ? '4px' : '14px',
+                        borderBottomLeftRadius: isMine ? '14px' : '4px',
+                        background: comment.is_internal
+                          ? 'rgba(245,158,11,0.1)'
+                          : isMine
+                            ? 'var(--accent)'
+                            : 'var(--bg-muted)',
+                        border: comment.is_internal ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent',
+                        color: isMine && !comment.is_internal ? 'white' : 'var(--text-primary)',
+                        fontSize: '0.875rem',
+                        lineHeight: 1.5,
+                      }}>
+                        <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{comment.message}</p>
                       </div>
                     </div>
                   );
@@ -264,35 +441,48 @@ export const TicketDetail: React.FC = () => {
               )}
             </div>
 
-            {/* Mesaj Gönderme Formu */}
-            <form onSubmit={handleSendComment} className="mt-auto border-t pt-4 flex flex-col gap-2">
-              <div className="flex gap-2">
+            {/* Comment Form */}
+            <form onSubmit={handleSendComment} style={{ borderTop: '1px solid var(--border)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
+              {showCannedPicker && (
+                <CannedResponsePicker
+                  onSelect={content => setCommentText(prev => prev + (prev ? '\n' : '') + content)}
+                  onClose={() => setShowCannedPicker(false)}
+                />
+              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {isSupportOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCannedPicker(v => !v)}
+                    className="btn-ghost"
+                    title="Hazır Cevap Seç"
+                    style={{ padding: '8px 10px', flexShrink: 0 }}
+                  >
+                    <BookOpen size={15} />
+                  </button>
+                )}
                 <input
                   type="text"
-                  placeholder="Mesajınızı yazın..."
-                  className="flex-1 rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2"
+                  placeholder={ticket.status === 'CLOSED' ? 'Bu bilet kapatıldı.' : 'Mesajınızı yazın...'}
+                  className="input-field"
+                  style={{ flex: 1 }}
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
+                  onChange={e => setCommentText(e.target.value)}
                   disabled={addCommentMutation.isPending || ticket.status === 'CLOSED'}
                 />
                 <button
                   type="submit"
                   disabled={!commentText.trim() || addCommentMutation.isPending || ticket.status === 'CLOSED'}
-                  className="inline-flex items-center justify-center p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                  className="btn-primary"
+                  style={{ padding: '8px 14px', flexShrink: 0 }}
                 >
-                  <Send className="w-5 h-5" />
+                  <Send size={15} />
                 </button>
               </div>
               {isSupportOrAdmin && ticket.status !== 'CLOSED' && (
-                <div className="flex items-center mt-1 ml-1">
-                  <input
-                    id="is_internal"
-                    type="checkbox"
-                    checked={isInternal}
-                    onChange={(e) => setIsInternal(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="is_internal" className="ml-2 block text-xs text-slate-600">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '2px' }}>
+                  <input id="is_internal" type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} style={{ cursor: 'pointer' }} />
+                  <label htmlFor="is_internal" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
                     🔒 Sadece Destek Ekibi Görsün (İç Yazışma)
                   </label>
                 </div>
@@ -301,82 +491,92 @@ export const TicketDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Sağ Kısım: Bilgi Paneli ve İşlemler */}
-        <div className="space-y-6">
-          
-          {/* Sadece yetkililere görünen durum güncelleme paneli */}
+        {/* Right: Info Panel */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* Ticket Management (Support/Admin) */}
           {isSupportOrAdmin && (
-            <div className="bg-blue-50 shadow-sm ring-1 ring-blue-200 rounded-xl p-6">
-              <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" /> Bilet Yönetimi
+            <div className="card" style={{ padding: '20px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)' }}>
+              <h3 style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertCircle size={13} /> Bilet Yönetimi
               </h3>
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-slate-700">Durumu Değiştir</label>
-                <select
-                  value={ticket.status}
-                  onChange={handleStatusChange}
-                  disabled={updateStatusMutation.isPending}
-                  className="mt-1 block w-full rounded-md border-slate-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="OPEN">Açık</option>
-                  <option value="IN_PROGRESS">İşlemde</option>
-                  <option value="WAITING_FOR_USER">Kullanıcı Bekleniyor</option>
-                  <option value="RESOLVED">Çözüldü</option>
-                  <option value="CLOSED">Kapatıldı</option>
-                </select>
-              </div>
-              
+              <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Durumu Değiştir</label>
+              <select
+                value={ticket.status}
+                onChange={handleStatusChange}
+                disabled={updateStatusMutation.isPending}
+                className="input-field"
+                style={{ width: '100%' }}
+              >
+                <option value="OPEN">Açık</option>
+                <option value="ASSIGNED">Atandı</option>
+                <option value="IN_PROGRESS">İşlemde</option>
+                <option value="WAITING_FOR_USER">Kullanıcı Bekleniyor</option>
+                <option value="RESOLVED">Çözüldü</option>
+                <option value="CLOSED">Kapatıldı</option>
+              </select>
               {me?.role === 'ADMIN' && (
-                <div className="mt-4 pt-4 border-t border-blue-100">
-                  <button
-                    onClick={handleDeleteTicket}
-                    disabled={deleteTicketMutation.isPending}
-                    className="w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                  >
-                    Bileti Kalıcı Olarak Sil
-                  </button>
-                </div>
+                <button onClick={handleDeleteTicket} disabled={deleteTicketMutation.isPending}
+                  style={{ marginTop: '12px', width: '100%', padding: '8px', borderRadius: '8px', border: 'none', background: 'rgba(239,68,68,0.1)', color: '#dc2626', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600 }}>
+                  Bileti Kalıcı Sil
+                </button>
               )}
             </div>
           )}
 
-          <div className="bg-white shadow-sm ring-1 ring-slate-200 rounded-xl p-6">
-            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4">Talep Bilgileri</h3>
-            
-            <dl className="space-y-4">
+          {/* Ticket Info */}
+          <div className="card" style={{ padding: '20px' }}>
+            <h3 style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' }}>
+              Talep Bilgileri
+            </h3>
+            <dl style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[
+                { label: 'Departman', value: ticket.department.name },
+                { label: 'Kategori', value: ticket.category.name },
+                {
+                  label: 'Öncelik', value:
+                    ticket.priority === 'CRITICAL' ? '🔴 Kritik' :
+                      ticket.priority === 'HIGH' ? '🟠 Yüksek' :
+                        ticket.priority === 'MEDIUM' ? '🟡 Orta' : '🟢 Düşük'
+                },
+              ].map(item => (
+                <div key={item.label}>
+                  <dt style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>{item.label}</dt>
+                  <dd style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 600, marginTop: '2px' }}>{item.value}</dd>
+                </div>
+              ))}
               <div>
-                <dt className="text-sm font-medium text-slate-500">Departman</dt>
-                <dd className="mt-1 text-sm text-slate-900">{ticket.department.name}</dd>
-              </div>
-              
-              <div>
-                <dt className="text-sm font-medium text-slate-500">Kategori</dt>
-                <dd className="mt-1 text-sm text-slate-900">{ticket.category.name}</dd>
-              </div>
-
-              <div>
-                <dt className="text-sm font-medium text-slate-500">Öncelik</dt>
-                <dd className="mt-1 text-sm text-slate-900">
-                  {ticket.priority === 'URGENT' ? 'Acil' : ticket.priority === 'HIGH' ? 'Yüksek' : ticket.priority === 'LOW' ? 'Düşük' : 'Orta'}
-                </dd>
-              </div>
-
-              <div>
-                <dt className="text-sm font-medium text-slate-500 flex items-center gap-1">
-                  <Clock className="w-4 h-4" /> Açılış Tarihi
+                <dt style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Clock size={12} /> Açılış Tarihi
                 </dt>
-                <dd className="mt-1 text-sm text-slate-900">
-                  {new Date(ticket.created_at).toLocaleString('tr-TR', { 
-                    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                  })}
+                <dd style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 600, marginTop: '2px' }}>
+                  {new Date(ticket.created_at).toLocaleString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </dd>
               </div>
+              {ticket.due_at && (
+                <div>
+                  <dt style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Timer size={12} /> SLA Bitiş
+                  </dt>
+                  <dd style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 600, marginTop: '2px' }}>
+                    {new Date(ticket.due_at).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </dd>
+                </div>
+              )}
+              {ticket.csat_score !== null && (
+                <div>
+                  <dt style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Star size={12} /> Memnuniyet
+                  </dt>
+                  <dd style={{ fontSize: '0.875rem', color: '#f59e0b', fontWeight: 700, marginTop: '2px' }}>
+                    {'⭐'.repeat(ticket.csat_score)} ({ticket.csat_score}/5)
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
         </div>
-
       </div>
     </div>
   );
 };
-

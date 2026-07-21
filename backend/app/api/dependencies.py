@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import verify_token
@@ -42,7 +42,7 @@ async def get_current_user(
             email=email,
             full_name=full_name,
             entra_object_id=oid,
-            role=UserRole.EMPLOYEE
+            role=UserRole.BACKEND_DEV
         )
         db.add(user)
         db.commit()
@@ -59,6 +59,23 @@ def require_admin(current_user: User = Depends(get_current_user)):
     return current_user
 
 def require_support_agent(current_user: User = Depends(get_current_user)):
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPPORT_AGENT]:
-        raise HTTPException(status_code=403, detail="Bu işlem için SUPPORT_AGENT yetkisi gereklidir")
+    # Support Agent konsepti kalktı. Admin dışındaki yazılım takımları hepsi destek verebilir.
     return current_user
+
+async def get_optional_user(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User | None:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ")[1]
+    
+    try:
+        from app.core.security import verify_token
+        from fastapi.security import HTTPAuthorizationCredentials
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        payload = await verify_token(credentials)
+        return await get_current_user(token_payload=payload, db=db)
+    except Exception:
+        return None

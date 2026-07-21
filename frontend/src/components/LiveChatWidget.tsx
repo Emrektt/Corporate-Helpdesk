@@ -23,7 +23,7 @@ function formatTime(isoString: string) {
 
 export const LiveChatWidget: React.FC = () => {
   const { instance, accounts } = useMsal();
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe, staleTime: Infinity });
 
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);

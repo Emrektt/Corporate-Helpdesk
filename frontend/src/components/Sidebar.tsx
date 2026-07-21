@@ -5,11 +5,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMe } from '../api/auth-service';
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, Notification } from '../api/notification-service';
 import { useTheme } from '../context/ThemeContext';
+import { useAdminMode } from '../context/AdminModeContext';
 import {
   LayoutDashboard, PlusCircle, BookOpen, BarChart2,
   Settings, LogOut, Bell, Sun, Moon, ChevronRight,
   CheckCircle2, Ticket, ExternalLink,
-  PanelLeftClose, PanelLeftOpen, X, Check
+  PanelLeftClose, PanelLeftOpen, X, Check, Activity,
+  ShieldCheck, UserCircle2, Users
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -17,6 +19,7 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   const { isDark, toggleTheme } = useTheme();
+  const { isAdminMode, toggleAdminMode } = useAdminMode();
   const queryClient = useQueryClient();
 
   const [collapsed, setCollapsed] = useState(window.innerWidth < 1024);
@@ -33,11 +36,16 @@ export const Sidebar: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: getMe,
+    staleTime: Infinity, // Kullanıcı bilgisi oturum boyunca değişmez, tekrar çekilmesin
+  });
   const { data: notifications } = useQuery({
     queryKey: ['notifications'],
     queryFn: getNotifications,
-    refetchInterval: 30000,
+    refetchInterval: 60 * 1000, // 30s yerine 60s — gereksiz istek sayısını yarıya indir
+    staleTime: 30 * 1000,
   });
 
   const markReadMutation = useMutation({
@@ -91,10 +99,14 @@ export const Sidebar: React.FC = () => {
     { name: 'Bilgi Bankası', path: '/knowledge-base', icon: BookOpen },
   ];
 
-  if (me?.role === 'ADMIN' || me?.role === 'SUPPORT_AGENT') {
+  const isAdmin = me?.role === 'ADMIN';
+  // Admin User-Mode'da iken sadece normal kullanıcı menüsünü göster
+  if (!isAdmin || isAdminMode) {
     navItems.push({ name: 'Raporlar', path: '/reports', icon: BarChart2 });
   }
-  if (me?.role === 'ADMIN') {
+  if (isAdmin && isAdminMode) {
+    navItems.push({ name: 'Sistem Logları', path: '/admin/logs', icon: Activity });
+    navItems.push({ name: 'Kullanıcılar', path: '/admin/users', icon: Users });
     navItems.push({ name: 'Ayarlar', path: '/settings', icon: Settings });
   }
 
@@ -350,6 +362,58 @@ export const Sidebar: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Admin Mode Toggle - sadece admin kullanıcılara göster */}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                toggleAdminMode();
+                if (isAdminMode) {
+                  const adminPaths = ['/admin/logs', '/admin/users', '/settings', '/reports'];
+                  if (adminPaths.includes(location.pathname)) {
+                    navigate('/dashboard');
+                  }
+                }
+              }}
+              title={isAdminMode ? 'Kullanıcı Moduna Geç' : 'Admin Moduna Geç'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                border: `1.5px solid ${isAdminMode ? 'rgba(139,92,246,0.4)' : 'rgba(16,185,129,0.4)'}`,
+                background: isAdminMode ? 'rgba(139,92,246,0.08)' : 'rgba(16,185,129,0.08)',
+                cursor: 'pointer',
+                marginBottom: '6px',
+                transition: 'all 0.2s ease',
+                overflow: 'hidden',
+              }}
+            >
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
+                background: isAdminMode ? 'linear-gradient(135deg,#8b5cf6,#6d28d9)' : 'linear-gradient(135deg,#10b981,#059669)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: isAdminMode ? '0 2px 8px rgba(139,92,246,0.35)' : '0 2px 8px rgba(16,185,129,0.35)',
+                transition: 'all 0.2s ease',
+              }}>
+                {isAdminMode
+                  ? <ShieldCheck size={14} color="white" />
+                  : <UserCircle2 size={14} color="white" />}
+              </div>
+              {!collapsed && (
+                <div style={{ flex: 1, textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: isAdminMode ? '#8b5cf6' : '#10b981', lineHeight: 1.2 }}>
+                    {isAdminMode ? 'Admin Modu' : 'Kullanıcı Modu'}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                    {isAdminMode ? 'Kullanıcı moduna geç →' : '← Admin moduna dön'}
+                  </div>
+                </div>
+              )}
+            </button>
+          )}
 
           {/* User Info + Logout */}
           <div style={{

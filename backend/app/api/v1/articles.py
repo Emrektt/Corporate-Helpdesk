@@ -7,6 +7,8 @@ from app.api.dependencies import get_current_user
 from app.models.user import User, UserRole
 from app.models.article import Article
 from app.schemas.article import ArticleCreate, ArticleUpdate, ArticleResponse
+from app.core.audit import log_audit_event
+from fastapi import Request
 
 router = APIRouter()
 
@@ -19,9 +21,7 @@ def get_articles(
     """Makaleleri listeler. Çalışanlar sadece yayında olanları görebilir."""
     query = db.query(Article)
     
-    if current_user.role == UserRole.EMPLOYEE:
-        query = query.filter(Article.is_published == True)
-        
+    # Herkes yayında olmayanları da görebilsin (taslaklar vb.)
     if department_id:
         query = query.filter(Article.department_id == department_id)
         
@@ -61,9 +61,7 @@ def get_article(
     if not article:
         raise HTTPException(status_code=404, detail="Makale bulunamadı")
         
-    if current_user.role == UserRole.EMPLOYEE and not article.is_published:
-        raise HTTPException(status_code=403, detail="Bu makaleyi görüntüleme yetkiniz yok")
-        
+    # Herkes görüntüleyebilir
     # Okuma sayısını artır
     article.view_count += 1
     db.commit()
@@ -74,13 +72,11 @@ def get_article(
 @router.post("/", response_model=ArticleResponse, status_code=201)
 def create_article(
     article_in: ArticleCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Yeni makale oluşturur. Sadece ADMIN ve SUPPORT_AGENT oluşturabilir."""
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=403, detail="Makale oluşturma yetkiniz yok")
-        
+    # Herkes makale oluşturabilir
     new_article = Article(
         title=article_in.title,
         content=article_in.content,
@@ -92,19 +88,30 @@ def create_article(
     db.add(new_article)
     db.commit()
     db.refresh(new_article)
+
+    # Log audit event
+    log_audit_event(
+        db=db,
+        request=request,
+        level="INFO",
+        source="ARTICLE",
+        event_type="ARTICLE_CREATED",
+        message=f"{current_user.full_name}, '{new_article.title}' başlıklı makaleyi oluşturdu.",
+        user=current_user,
+    )
+
     return new_article
 
 @router.put("/{article_id}", response_model=ArticleResponse)
 def update_article(
     article_id: int,
     article_in: ArticleUpdate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Makaleyi günceller."""
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=403, detail="Makale düzenleme yetkiniz yok")
-        
+    # Herkes makale güncelleyebilir
     article = db.query(Article).filter(Article.id == article_id).first()
     if not article:
         raise HTTPException(status_code=404, detail="Makale bulunamadı")
@@ -120,22 +127,48 @@ def update_article(
         
     db.commit()
     db.refresh(article)
+
+    # Log audit event
+    log_audit_event(
+        db=db,
+        request=request,
+        level="INFO",
+        source="ARTICLE",
+        event_type="ARTICLE_UPDATED",
+        message=f"{current_user.full_name}, '{article.title}' başlıklı makaleyi güncelledi.",
+        user=current_user,
+    )
+
     return article
 
 @router.delete("/{article_id}")
 def delete_article(
     article_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Makaleyi siler."""
-    if current_user.role == UserRole.EMPLOYEE:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Makale silme yetkiniz yok")
         
     article = db.query(Article).filter(Article.id == article_id).first()
     if not article:
         raise HTTPException(status_code=404, detail="Makale bulunamadı")
         
+    article_title = article.title
     db.delete(article)
     db.commit()
+
+    # Log audit event
+    log_audit_event(
+        db=db,
+        request=request,
+        level="WARNING",
+        source="ARTICLE",
+        event_type="ARTICLE_DELETED",
+        message=f"Admin {current_user.full_name}, '{article_title}' başlıklı makaleyi sildi.",
+        user=current_user,
+    )
+
     return {"message": "Makale başarıyla silindi"}

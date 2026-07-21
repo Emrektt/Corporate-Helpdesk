@@ -30,3 +30,9 @@ class TicketResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PaginatedTickets(BaseModel):
+    total: int
+    page: int
+    limit: int
+    items: List[TicketResponse]

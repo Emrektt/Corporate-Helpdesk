@@ -16,7 +16,11 @@ def test_get_tickets_authenticated(client, test_user):
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    data = response.json()
+    assert isinstance(data, dict)
+    assert "total" in data
+    assert "items" in data
+    assert isinstance(data["items"], list)
 
 def test_create_ticket_authenticated(client, test_user):
     login_res = client.post(

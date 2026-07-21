@@ -6,6 +6,8 @@ export interface AnalyticsSummary {
     in_progress_tickets: number;
     resolved_tickets: number;
     closed_tickets: number;
+    avg_csat_score: number | null;
+    sla_breached_count: number;
 }
 
 export interface DepartmentDistribution {
@@ -19,8 +21,10 @@ export interface DailyTrend {
     resolved: number;
 }
 
-export const getAnalyticsSummary = async (): Promise<AnalyticsSummary> => {
-    const response = await axiosClient.get("/api/v1/analytics/summary");
+export const getAnalyticsSummary = async (asUser?: boolean): Promise<AnalyticsSummary> => {
+    const params = new URLSearchParams();
+    if (asUser) params.append('as_user', 'true');
+    const response = await axiosClient.get("/api/v1/analytics/summary", { params });
     return response.data;
 };
 

@@ -2,13 +2,12 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getArticles, getArticle, createArticle, updateArticle, deleteArticle, Article } from '../api/article-service';
 import { getDepartments } from '../api/ticket-service';
-import { getMe } from '../api/auth-service';
 import { BookOpen, Search, PlusCircle, Edit2, Trash2, Eye, ChevronRight, Save, X, ArrowLeft } from 'lucide-react';
 
 const LABEL: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' };
 
 export const KnowledgeBase: React.FC = () => {
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
+
   const queryClient = useQueryClient();
 
   const [selectedDept, setSelectedDept] = useState<number | undefined>();
@@ -34,7 +33,7 @@ export const KnowledgeBase: React.FC = () => {
     }
   };
   const handleEdit = (a: Article) => { setEditForm({ id: a.id, title: a.title, content: a.content, department_id: a.department_id, is_published: a.is_published }); setIsEditing(true); setViewArticle(null); };
-  const isStaff = me?.role === 'ADMIN' || me?.role === 'SUPPORT_AGENT';
+  const isStaff = true; // Herkes makale oluşturabilir/düzenleyebilir
   const filtered = articles?.filter(a => a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.content.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (

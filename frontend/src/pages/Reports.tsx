@@ -1,34 +1,24 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalyticsSummary, getDepartmentDistribution, getTicketTrend } from '../api/analytics-service';
-import { getMe } from '../api/auth-service';
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend,
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer
 } from 'recharts';
 import { AlertCircle, Ticket, Clock, CheckCircle, RefreshCw, BarChart2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useAdminMode } from '../context/AdminModeContext';
 
 const COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#14B8A6', '#F59E0B', '#10B981', '#3B82F6'];
 
 export const Reports: React.FC = () => {
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
+
   const { isDark } = useTheme();
+  const { isAdminMode } = useAdminMode();
 
-  const enabled = me?.role === 'ADMIN' || me?.role === 'SUPPORT_AGENT';
-  const { data: summary, isLoading: l1 } = useQuery({ queryKey: ['analytics_summary'], queryFn: getAnalyticsSummary, enabled });
-  const { data: deptData, isLoading: l2 } = useQuery({ queryKey: ['analytics_departments'], queryFn: getDepartmentDistribution, enabled });
-  const { data: trendData, isLoading: l3 } = useQuery({ queryKey: ['analytics_trend'], queryFn: getTicketTrend, enabled });
-
-  if (!enabled) return (
-    <div className="card" style={{ maxWidth: '480px', margin: '48px auto', padding: '40px', textAlign: 'center' }}>
-      <AlertCircle size={36} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
-      <h2 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>Erişim Engellendi</h2>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>Bu sayfayı görüntüleme yetkiniz yok.</p>
-      <Link to="/dashboard"><button className="btn-primary">Ana Sayfaya Dön</button></Link>
-    </div>
-  );
+  const { data: summary, isLoading: l1 } = useQuery({ queryKey: ['analytics_summary', !isAdminMode], queryFn: () => getAnalyticsSummary(!isAdminMode), staleTime: 5 * 60 * 1000 });
+  const { data: deptData, isLoading: l2 } = useQuery({ queryKey: ['analytics_departments'], queryFn: () => getDepartmentDistribution(), staleTime: 5 * 60 * 1000 });
+  const { data: trendData, isLoading: l3 } = useQuery({ queryKey: ['analytics_trend'], queryFn: () => getTicketTrend(), staleTime: 5 * 60 * 1000 });
 
   if (l1 || l2 || l3) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>

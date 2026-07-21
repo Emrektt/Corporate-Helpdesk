@@ -68,25 +68,40 @@ export interface Ticket {
     department: Department;
     category: Category;
     created_at: string;
+    due_at: string | null;
     attachments: Attachment[];
+    csat_score: number | null;
+    csat_comment: string | null;
+    csat_submitted_at: string | null;
+    created_by_id: number;
 }
 
 export interface TicketFilters {
     search?: string;
     status?: string;
     priority?: string;
+    asUser?: boolean;
+    page?: number;
+    limit?: number;
 }
 
-export const getTickets = async (filters?: TicketFilters): Promise<Ticket[]> => {
+export interface PaginatedTickets {
+    total: number;
+    page: number;
+    limit: number;
+    items: Ticket[];
+}
+
+export const getTickets = async (filters?: TicketFilters): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
     if (filters?.search) params.append('search', filters.search);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.priority) params.append('priority', filters.priority);
+    if (filters?.asUser) params.append('as_user', 'true');
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
     
-    const queryString = params.toString();
-    const url = queryString ? `/api/v1/tickets/?${queryString}` : "/api/v1/tickets/";
-    
-    const response = await axiosClient.get(url);
+    const response = await axiosClient.get<PaginatedTickets>('/api/v1/tickets/', { params });
     return response.data;
 };
 
@@ -139,4 +154,21 @@ export const uploadAttachment = async (ticketId: number, file: File): Promise<At
     return response.data;
 };
 
+export interface SLAStatus {
+    has_sla: boolean;
+    status?: 'ok' | 'warning' | 'breached' | 'resolved';
+    due_at?: string;
+    remaining_seconds?: number;
+    remaining_label?: string;
+    is_breached?: boolean;
+}
 
+export const getSLAStatus = async (ticketId: number): Promise<SLAStatus> => {
+    const response = await axiosClient.get(`/api/v1/tickets/${ticketId}/sla`);
+    return response.data;
+};
+
+export const submitCSAT = async (ticketId: number, score: number, comment: string = ''): Promise<{ message: string; score: number }> => {
+    const response = await axiosClient.post(`/api/v1/tickets/${ticketId}/csat`, { score, comment });
+    return response.data;
+};

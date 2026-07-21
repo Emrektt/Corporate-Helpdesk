@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment, createCategory, deleteCategory } from '../api/ticket-service';
+import { getCannedResponses, createCannedResponse, deleteCannedResponse, CannedResponse } from '../api/canned-response-service';
 import { getMe } from '../api/auth-service';
-import { Settings as SettingsIcon, Plus, Trash2, Edit2, AlertCircle, Building2, FolderTree, X } from 'lucide-react';
+import { Settings as SettingsIcon, Plus, Trash2, Edit2, AlertCircle, Building2, FolderTree, X, BookOpen } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
 export const Settings: React.FC = () => {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'departments' | 'canned'>('departments');
   const [activeDept, setActiveDept] = useState<number | null>(null);
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [isCannedModalOpen, setIsCannedModalOpen] = useState(false);
+  const [cannedTitle, setCannedTitle] = useState('');
+  const [cannedContent, setCannedContent] = useState('');
+  const [cannedCategory, setCannedCategory] = useState('');
   
   // Department Form
   const [deptName, setDeptName] = useState('');
@@ -110,6 +116,26 @@ export const Settings: React.FC = () => {
     createCatMutation.mutate();
   };
 
+  // Canned Responses
+  const { data: cannedResponses = [] } = useQuery({
+    queryKey: ['canned-responses'],
+    queryFn: () => getCannedResponses(),
+  });
+
+  const createCannedMutation = useMutation({
+    mutationFn: () => createCannedResponse({ title: cannedTitle, content: cannedContent, category: cannedCategory || undefined }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canned-responses'] });
+      setIsCannedModalOpen(false);
+      setCannedTitle(''); setCannedContent(''); setCannedCategory('');
+    }
+  });
+
+  const deleteCannedMutation = useMutation({
+    mutationFn: (id: number) => deleteCannedResponse(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['canned-responses'] }),
+  });
+
   if (meLoading || deptsLoading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-4rem)]">
@@ -126,17 +152,110 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="sm:flex sm:items-center sm:justify-between mb-8">
+      <div className="sm:flex sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <SettingsIcon className="w-6 h-6 text-slate-500" /> Sistem Ayarları
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <SettingsIcon size={22} style={{ color: 'var(--text-muted)' }} /> Sistem Ayarları
           </h1>
-          <p className="mt-2 text-sm text-slate-700">
-            Departmanları ve destek kategorilerini buradan yönetebilirsiniz.
-          </p>
+          <p className="page-subtitle">Departmanlar, kategoriler ve hazır cevapları yönetin.</p>
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', background: 'var(--bg-muted)', padding: '4px', borderRadius: '10px', width: 'fit-content' }}>
+        {[
+          { key: 'departments', label: 'Departmanlar & Kategoriler', icon: <Building2 size={14} /> },
+          { key: 'canned', label: 'Hazır Cevaplar', icon: <BookOpen size={14} /> },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as typeof activeTab)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '7px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+              fontSize: '0.8375rem', fontWeight: 600, transition: 'all 0.2s ease',
+              background: activeTab === tab.key ? 'var(--bg-card)' : 'transparent',
+              color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-muted)',
+              boxShadow: activeTab === tab.key ? 'var(--shadow)' : 'none',
+            }}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'canned' ? (
+        /* Hazır Cevaplar Sekmesi */
+        <div className="card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <BookOpen size={18} color="var(--accent)" /> Hazır Cevap Şablonları
+            </h2>
+            <button className="btn-primary" style={{ fontSize: '0.8125rem' }} onClick={() => setIsCannedModalOpen(true)}>
+              <Plus size={14} /> Yeni Şablon
+            </button>
+          </div>
+          {cannedResponses.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
+              <BookOpen size={36} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+              <p style={{ fontSize: '0.875rem' }}>Henüz hazır cevap şablonu yok.</p>
+              <p style={{ fontSize: '0.78rem' }}>Sık kullanılan yanıtlarınızı buraya ekleyin.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {cannedResponses.map((cr: CannedResponse) => (
+                <div key={cr.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '14px 16px', background: 'var(--bg-muted)', borderRadius: '10px', border: '1px solid var(--border)', gap: '12px' }}>
+                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: '2px' }}>{cr.title}</div>
+                    {cr.category && (
+                      <span style={{ fontSize: '0.7rem', background: 'rgba(99,102,241,0.1)', color: 'var(--accent)', padding: '1px 6px', borderRadius: '4px', marginBottom: '4px', display: 'inline-block' }}>{cr.category}</span>
+                    )}
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{cr.content}</p>
+                  </div>
+                  <button
+                    onClick={() => { if (window.confirm('Bu şablonu silmek istediğinize emin misiniz?')) deleteCannedMutation.mutate(cr.id); }}
+                    style={{ background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: '6px', padding: '6px', cursor: 'pointer', color: '#dc2626', flexShrink: 0 }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Canned Response Modal */}
+          {isCannedModalOpen && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+              <div className="card" style={{ padding: '28px', width: '100%', maxWidth: '500px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', margin: 0 }}>Yeni Hazır Cevap</h3>
+                  <button onClick={() => setIsCannedModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={18} /></button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Başlık *</label>
+                    <input className="input-field" value={cannedTitle} onChange={e => setCannedTitle(e.target.value)} placeholder="Ör: Şifre Sıfırlama Adımları" style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Kategori (İsteğe Bağlı)</label>
+                    <input className="input-field" value={cannedCategory} onChange={e => setCannedCategory(e.target.value)} placeholder="Ör: Genel, Network, Yazılım" style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>İçerik *</label>
+                    <textarea className="input-field" value={cannedContent} onChange={e => setCannedContent(e.target.value)} placeholder="Şablon metnini buraya yazın..." rows={5} style={{ width: '100%', resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button className="btn-ghost" onClick={() => setIsCannedModalOpen(false)}>İptal</button>
+                    <button className="btn-primary" onClick={() => createCannedMutation.mutate()} disabled={!cannedTitle.trim() || !cannedContent.trim() || createCannedMutation.isPending}>
+                      {createCannedMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Sol Sütun: Departmanlar */}
         <div className="md:col-span-1">
@@ -259,6 +378,7 @@ export const Settings: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* Departman Ekleme/Düzenleme Modalı */}
       {isDeptModalOpen && (
@@ -363,7 +483,7 @@ export const Settings: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
+

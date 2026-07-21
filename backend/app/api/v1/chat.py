@@ -162,8 +162,8 @@ def get_all_rooms(
     db: Session = Depends(get_db)
 ):
     """Admin/Destek: Tüm aktif ve kapalı odaları getirir."""
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=403, detail="Yetki yetersiz")
+    if current_user.role not in [UserRole.ADMIN, UserRole.SUPPORT_AGENT]:
+        raise HTTPException(status_code=403, detail="Sadece Destek veya Admin odaları görebilir")
     rooms = db.query(ChatRoom).order_by(ChatRoom.created_at.desc()).all()
     return [serialize_room(r) for r in rooms]
 
@@ -179,10 +179,6 @@ def get_room_messages(
     if not room:
         raise HTTPException(status_code=404, detail="Oda bulunamadı")
 
-    # Sadece odanın sahibi veya destek uzmanları mesajları görebilir
-    if current_user.role == UserRole.EMPLOYEE and room.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Yetki yetersiz")
-
     msgs = db.query(ChatMessage).filter(ChatMessage.room_id == room_id).order_by(ChatMessage.created_at).all()
     return [serialize_message(m) for m in msgs]
 
@@ -193,13 +189,12 @@ def close_room(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Sohbeti kapatır."""
+    """Sohbeti kapatır. Oda sahibi veya Admin/Support kapatabilir."""
     room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Oda bulunamadı")
-    if current_user.role == UserRole.EMPLOYEE and room.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Yetki yetersiz")
-
+    if room.user_id != current_user.id and current_user.role not in [UserRole.ADMIN, UserRole.SUPPORT_AGENT]:
+        raise HTTPException(status_code=403, detail="Bu odayı kapatma yetkiniz yok")
     room.status = ChatRoomStatus.CLOSED
     room.closed_at = datetime.now(timezone.utc)
     db.commit()
@@ -213,9 +208,8 @@ async def claim_room(
     db: Session = Depends(get_db)
 ):
     """Destek uzmanı bir sohbet odasını üstlenir."""
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=403, detail="Yetki yetersiz")
-
+    if current_user.role not in [UserRole.ADMIN, UserRole.SUPPORT_AGENT]:
+        raise HTTPException(status_code=403, detail="Sadece Destek veya Admin bu odayı üstlenebilir")
     room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Oda bulunamadı")
@@ -267,11 +261,6 @@ async def websocket_endpoint(
         room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
         if not room:
             await websocket.close(code=4004, reason="Oda bulunamadı")
-            return
-
-        # Yetki kontrolü: kullanıcı kendi odası, destek ekibi her odaya girebilir
-        if user.role == UserRole.EMPLOYEE and room.user_id != user.id:
-            await websocket.close(code=4003, reason="Yetki yetersiz")
             return
 
         await manager.connect(websocket, room_id, user.id)

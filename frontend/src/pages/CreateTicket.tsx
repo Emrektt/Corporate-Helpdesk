@@ -7,7 +7,7 @@ import { getDepartments, createTicket, Department } from '../api/ticket-service'
 import { searchArticles, Article } from '../api/article-service';
 import { Send, AlertCircle, CheckCircle2, Lightbulb, ChevronRight, PlusCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
+import { getMe } from '../api/auth-service';
 const ticketSchema = z.object({
   department_id: z.string().min(1, 'Lütfen departman seçin'),
   category_id:   z.string().min(1, 'Lütfen kategori seçin'),
@@ -29,10 +29,14 @@ export const CreateTicket: React.FC = () => {
   const [suggestedArticles, setSuggestedArticles] = useState<Article[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  const { data: departments, isLoading: isDeptsLoading } = useQuery<Department[]>({
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
+
+  const { data: allDepartments, isLoading: isDeptsLoading } = useQuery<Department[]>({
     queryKey: ['departments'],
     queryFn: getDepartments,
   });
+
+  const departments = (me?.role === 'ADMIN' || me?.role === 'SUPPORT_AGENT') ? allDepartments : allDepartments?.filter(d => d.id === me?.department_id);
 
   const { register, handleSubmit, watch, formState: { errors }, reset } = useForm<TicketFormData>({
     resolver: zodResolver(ticketSchema),

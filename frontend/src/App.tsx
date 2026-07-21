@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/AuthProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { ThemeProvider } from './context/ThemeContext';
+import { AdminModeProvider } from './context/AdminModeContext';
+import { AdminRoute } from './auth/AdminRoute';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { CreateTicket } from './pages/CreateTicket';
@@ -12,13 +14,17 @@ import { Reports } from './pages/Reports';
 import { KnowledgeBase } from './pages/KnowledgeBase';
 import { LiveChatWidget } from './components/LiveChatWidget';
 import { Login } from './pages/Login';
-import { Register } from './pages/Register';
+import { SystemLogs } from './pages/SystemLogs';
+import { Users } from './pages/Users';
+import { GlobalErrorBoundary } from './components/GlobalErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      // Veriyi 2 dakika boyunca "taze" say — gereksiz arka plan isteklerini engelle
+      staleTime: 2 * 60 * 1000,
     },
   },
 });
@@ -40,13 +46,14 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <ThemeProvider>
+      <AdminModeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <Router>
+          <GlobalErrorBoundary>
+            <Router>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
 
               <Route path="/dashboard" element={
                 <AppLayout><Dashboard /></AppLayout>
@@ -61,7 +68,7 @@ function App() {
               } />
 
               <Route path="/settings" element={
-                <AppLayout><Settings /></AppLayout>
+                <AppLayout><AdminRoute><Settings /></AdminRoute></AppLayout>
               } />
 
               <Route path="/reports" element={
@@ -71,13 +78,23 @@ function App() {
               <Route path="/knowledge-base" element={
                 <AppLayout><KnowledgeBase /></AppLayout>
               } />
+
+              <Route path="/admin/logs" element={
+                <AppLayout><AdminRoute><SystemLogs /></AdminRoute></AppLayout>
+              } />
+
+              <Route path="/admin/users" element={
+                <AppLayout><AdminRoute><Users /></AdminRoute></AppLayout>
+              } />
             </Routes>
 
             {/* LiveChat: hem MSAL hem yerel girişte göster */}
             <LiveChatWidget />
           </Router>
+          </GlobalErrorBoundary>
         </AuthProvider>
       </QueryClientProvider>
+      </AdminModeProvider>
     </ThemeProvider>
   );
 }

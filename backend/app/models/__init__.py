@@ -9,5 +9,7 @@ from app.models.notification import Notification
 from app.models.ticket_attachment import TicketAttachment
 from app.models.article import Article
 from app.models.chat import ChatRoom, ChatMessage
+from app.models.canned_response import CannedResponse
+from app.models.event import EventLog
 
 # Alembic'in tüm modelleri bulabilmesi için bu dosyayı içe aktarması yeterli olacaktır.

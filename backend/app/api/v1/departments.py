@@ -8,6 +8,8 @@ from app.models.ticket import Ticket
 from app.schemas.department import DepartmentWithCategories, DepartmentCreate, DepartmentUpdate, CategoryCreate, CategoryBase
 from app.models.user import User, UserRole
 from app.api.dependencies import get_current_user
+from app.core.audit import log_audit_event
+from fastapi import Request
 
 router = APIRouter()
 
@@ -24,6 +26,7 @@ def get_departments(db: Session = Depends(get_db)):
 @router.post("/", response_model=DepartmentWithCategories, status_code=201)
 def create_department(
     dept_in: DepartmentCreate,
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin)
 ):
@@ -31,12 +34,25 @@ def create_department(
     db.add(new_dept)
     db.commit()
     db.refresh(new_dept)
+
+    # Log audit event
+    log_audit_event(
+        db=db,
+        request=request,
+        level="INFO",
+        source="DEPARTMENT",
+        event_type="DEPARTMENT_CREATED",
+        message=f"Admin {admin.full_name}, '{new_dept.name}' departmanını oluşturdu.",
+        user=admin,
+    )
+
     return new_dept
 
 @router.put("/{dept_id}", response_model=DepartmentWithCategories)
 def update_department(
     dept_id: int,
     dept_in: DepartmentUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin)
 ):
@@ -46,6 +62,18 @@ def update_department(
     dept.name = dept_in.name
     db.commit()
     db.refresh(dept)
+
+    # Log audit event
+    log_audit_event(
+        db=db,
+        request=request,
+        level="INFO",
+        source="DEPARTMENT",
+        event_type="DEPARTMENT_UPDATED",
+        message=f"Admin {admin.full_name}, departman adını '{dept.name}' olarak güncelledi.",
+        user=admin,
+    )
+
     return dept
 
 @router.delete("/{dept_id}")

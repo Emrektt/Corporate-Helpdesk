@@ -56,8 +56,7 @@ def test_user(db):
     user = User(
         email="testuser@example.com",
         full_name="Test User",
-        hashed_password=get_password_hash("testpassword123"),
-        role=UserRole.EMPLOYEE,
+        role=UserRole.BACKEND_DEV,
         is_active=True
     )
     db.add(user)
@@ -70,7 +69,6 @@ def admin_user(db):
     user = User(
         email="admin@example.com",
         full_name="Admin User",
-        hashed_password=get_password_hash("adminpassword123"),
         role=UserRole.ADMIN,
         is_active=True
     )
@@ -78,3 +76,15 @@ def admin_user(db):
     db.commit()
     db.refresh(user)
     return user
+
+@pytest.fixture
+def user_token_headers(client, test_user):
+    login_res = client.post("/api/v1/auth/login", json={"email": test_user.email})
+    token = login_res.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture
+def admin_token_headers(client, admin_user):
+    login_res = client.post("/api/v1/auth/login", json={"email": admin_user.email})
+    token = login_res.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

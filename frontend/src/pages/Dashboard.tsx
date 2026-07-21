@@ -4,9 +4,10 @@ import { Link } from 'react-router-dom';
 import { getTickets, Ticket, TicketFilters } from '../api/ticket-service';
 import { getAnalyticsSummary } from '../api/analytics-service';
 import { getMe } from '../api/auth-service';
+import { useAdminMode } from '../context/AdminModeContext';
 import {
   CheckCircle, AlertCircle, RefreshCw, Eye,
-  Ticket as TicketIcon, Search, X, PlusCircle
+  Ticket as TicketIcon, Search, X, PlusCircle, UserCircle2, ShieldCheck
 } from 'lucide-react';
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
@@ -42,28 +43,43 @@ function AnimatedNumber({ value }: { value: number }) {
 export const Dashboard: React.FC = () => {
   const [filters, setFilters] = useState<TicketFilters>({ search: '', status: '', priority: '' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setFilters(prev => ({ ...prev, search: searchTerm })), 400);
+    const t = setTimeout(() => {
+      setFilters(prev => ({ ...prev, search: searchTerm }));
+      setPage(1); // Reset page on search
+    }, 400);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
-  const { data: summary } = useQuery({ queryKey: ['analytics_summary'], queryFn: getAnalyticsSummary });
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe, staleTime: Infinity });
+  const { isAdminMode, toggleAdminMode } = useAdminMode();
+  const isAdmin = me?.role === 'ADMIN';
+  const { data: summary } = useQuery({
+    queryKey: ['analytics_summary', !isAdminMode],
+    queryFn: () => getAnalyticsSummary(!isAdminMode),
+    staleTime: 5 * 60 * 1000,
+  });
   const { data: ticketsData, isLoading } = useQuery({
-    queryKey: ['tickets', filters],
-    queryFn: () => getTickets(filters),
+    queryKey: ['tickets', filters, page, !isAdminMode],
+    queryFn: () => getTickets({ ...filters, page, limit: itemsPerPage, asUser: !isAdminMode }),
     placeholderData: keepPreviousData,
+    staleTime: 60 * 1000,
   });
 
-  const tickets: Ticket[] = ticketsData ?? [];
+  const tickets: Ticket[] = ticketsData?.items ?? [];
+  const totalTickets = ticketsData?.total ?? 0;
+  const totalPages = Math.ceil(totalTickets / itemsPerPage);
 
   const statCards = [
     { label: 'Toplam Bilet', value: summary?.total_tickets ?? 0, icon: TicketIcon, color: 'stat-gradient-indigo', iconColor: '#6366F1' },
     { label: 'Açık',        value: summary?.open_tickets ?? 0,   icon: AlertCircle, color: 'stat-gradient-blue',   iconColor: '#3B82F6' },
     { label: 'İşlemde',     value: summary?.in_progress_tickets ?? 0, icon: RefreshCw, color: 'stat-gradient-amber', iconColor: '#F59E0B' },
     { label: 'Çözüldü',     value: summary?.resolved_tickets ?? 0, icon: CheckCircle, color: 'stat-gradient-emerald', iconColor: '#10B981' },
+    { label: 'SLA İhlali',  value: summary?.sla_breached_count ?? 0, icon: AlertCircle, color: 'stat-gradient-amber', iconColor: '#ef4444' },
   ];
 
   return (
@@ -74,6 +90,15 @@ export const Dashboard: React.FC = () => {
         <div>
           <h1 className="page-title">Genel Bakış</h1>
           <p className="page-subtitle">Hoş geldiniz, <strong style={{ color: 'var(--accent)' }}>{me?.full_name?.split(' ')[0]}</strong> 👋</p>
+          {isAdmin && !isAdminMode && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '8px', padding: '6px 12px', borderRadius: '8px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', fontSize: '0.78rem', color: '#059669', fontWeight: 600 }}>
+              <UserCircle2 size={14} />
+              Kullanıcı Modunda görüntüleniyor — 
+              <button onClick={toggleAdminMode} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#059669', fontWeight: 700, textDecoration: 'underline', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <ShieldCheck size={13} /> Admin Moduna Dön
+              </button>
+            </div>
+          )}
         </div>
         <Link to="/create-ticket">
           <button className="btn-primary">
@@ -222,6 +247,31 @@ export const Dashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!isLoading && totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', borderTop: '1px solid var(--border)', gap: '16px' }}>
+            <button 
+              onClick={() => setPage(p => Math.max(1, p - 1))} 
+              disabled={page === 1}
+              className="btn-ghost"
+              style={{ padding: '6px 12px', fontSize: '0.875rem', opacity: page === 1 ? 0.5 : 1, cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+            >
+              Önceki
+            </button>
+            <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+              Sayfa <span style={{ color: 'var(--accent)' }}>{page}</span> / {totalPages}
+            </span>
+            <button 
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+              disabled={page === totalPages}
+              className="btn-ghost"
+              style={{ padding: '6px 12px', fontSize: '0.875rem', opacity: page === totalPages ? 0.5 : 1, cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
+            >
+              Sonraki
+            </button>
           </div>
         )}
       </div>

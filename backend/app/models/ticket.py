@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -33,6 +33,11 @@ class Ticket(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     due_at = Column(DateTime(timezone=True), nullable=True)
+
+    # CSAT (Müşteri Memnuniyeti)
+    csat_score = Column(Integer, nullable=True)               # 1-5 yıldız
+    csat_comment = Column(Text, nullable=True)                # İsteğe bağlı yorum
+    csat_submitted_at = Column(DateTime(timezone=True), nullable=True)
 
     # İlişkiler
     category = relationship("Category", back_populates="tickets")
