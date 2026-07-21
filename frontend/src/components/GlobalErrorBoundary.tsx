@@ -15,7 +15,8 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
         this.state = { hasError: false };
     }
 
-    static getDerivedStateFromError(_error: Error): State {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    static getDerivedStateFromError(error: Error): State {
         return { hasError: true };
     }
 
