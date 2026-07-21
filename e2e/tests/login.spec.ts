@@ -5,7 +5,7 @@ test('Kullanıcı başarılı şekilde giriş yapabilmeli', async ({ page }) => 
   await page.goto('http://localhost:5173/login');
 
   // Sayfanın yüklendiğini kontrol et
-  await expect(page).toHaveTitle(/CorpHelpdesk/i);
+  await expect(page).toHaveTitle(/Helpdesk/i);
 
   // Normalde burada kullanıcı adı/şifre doldurma işlemi yapılır
   // Örneğin:
@@ -14,6 +14,6 @@ test('Kullanıcı başarılı şekilde giriş yapabilmeli', async ({ page }) => 
   // await page.click('button[type="submit"]');
 
   // Microsoft ile giriş butonu kontrolü
-  const msButton = page.getByRole('button', { name: /Microsoft ile Devam Et/i });
+  const msButton = page.getByRole('button', { name: /Microsoft ile Giriş Yap/i });
   await expect(msButton).toBeVisible();
 });

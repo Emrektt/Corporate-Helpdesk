@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface AdminModeContextType {
     isAdminMode: boolean;

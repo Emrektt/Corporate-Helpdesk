@@ -47,9 +47,7 @@ export const Navbar: React.FC = () => {
     { name: 'Bilgi Bankası', path: '/knowledge-base', icon: BookOpen },
   ];
 
-  if (true) {
-    navItems.push({ name: 'Raporlar', path: '/reports', icon: BarChart2 });
-  }
+  navItems.push({ name: 'Raporlar', path: '/reports', icon: BarChart2 });
 
   if (me?.role === 'ADMIN') {
     navItems.push({ name: 'Ayarlar', path: '/settings', icon: SettingsIcon });
