@@ -11,5 +11,6 @@ from app.models.article import Article
 from app.models.chat import ChatRoom, ChatMessage
 from app.models.canned_response import CannedResponse
 from app.models.event import EventLog
+from app.models.user_preference import UserPreference
 
 # Alembic'in tüm modelleri bulabilmesi için bu dosyayı içe aktarması yeterli olacaktır.

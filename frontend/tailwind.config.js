@@ -9,6 +9,13 @@ export default {
       colors: {
         indigo: {
           450: '#5B4EF0',
+        },
+        capita: {
+          navy: '#02083C',
+          cyan: '#8B5CF6', /* Changed to Purple */
+          slate: '#4F5377',
+          gray: '#ECECEC',
+          light: '#F5F5F5'
         }
       },
       animation: {

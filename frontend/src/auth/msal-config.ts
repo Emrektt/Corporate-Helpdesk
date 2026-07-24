@@ -14,7 +14,8 @@ export const msalConfig: Configuration = {
 
 // İstek yaparken hangi izinlere (scopes) ihtiyaç duyduğumuz
 export const loginRequest = {
-    scopes: ["User.Read", import.meta.env.VITE_MSAL_API_SCOPE || ""] 
+    // Rollerin tanımlı olduğu API uygulamasının (0833e3b0-...) scope'u.
+    scopes: [import.meta.env.VITE_MSAL_API_SCOPE || ""]
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);

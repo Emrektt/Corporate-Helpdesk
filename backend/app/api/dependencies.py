@@ -18,6 +18,7 @@ async def get_current_user(
         
     # MSAL Access Token'larında email hiç gelmeyebilir, sadece OID üzerinden kullanıcıyı bulabiliriz.
     if not email and not oid:
+        print("DEPENDENCY ERROR: Token içinde kullanıcı tanımlayıcı bilgi bulunamadı", flush=True)
         raise HTTPException(status_code=401, detail="Token içinde kullanıcı tanımlayıcı bilgi bulunamadı")
 
     user = None
@@ -42,7 +43,7 @@ async def get_current_user(
             email=email,
             full_name=full_name,
             entra_object_id=oid,
-            role=UserRole.BACKEND_DEV
+            role=UserRole.SUPPORT_AGENT
         )
         db.add(user)
         db.commit()

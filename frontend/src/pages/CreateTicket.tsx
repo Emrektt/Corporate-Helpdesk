@@ -6,8 +6,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { getDepartments, createTicket, Department } from '../api/ticket-service';
 import { searchArticles, Article } from '../api/article-service';
 import { Send, AlertCircle, CheckCircle2, Lightbulb, ChevronRight, PlusCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { getMe } from '../api/auth-service';
+import { Link } from 'react-router-dom';
 const ticketSchema = z.object({
   department_id: z.string().min(1, 'Lütfen departman seçin'),
   category_id:   z.string().min(1, 'Lütfen kategori seçin'),
@@ -30,6 +30,8 @@ export const CreateTicket: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe });
+
+
 
   const { data: allDepartments, isLoading: isDeptsLoading } = useQuery<Department[]>({
     queryKey: ['departments'],

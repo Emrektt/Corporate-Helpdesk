@@ -22,6 +22,10 @@ class TicketResponse(BaseModel):
     assigned_to_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    due_at: Optional[datetime] = None
+    csat_score: Optional[int] = None
+    csat_comment: Optional[str] = None
+    csat_submitted_at: Optional[datetime] = None
     
     # İç içe nesneler
     department: DepartmentBase

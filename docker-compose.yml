@@ -1,5 +1,3 @@
-version: '3.9'
-
 # ═══════════════════════════════════════════════════════════
 #  Corporate Helpdesk — Docker Compose
 #  Kullanım: docker compose up -d --build

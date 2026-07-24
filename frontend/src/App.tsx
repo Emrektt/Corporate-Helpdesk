@@ -29,8 +29,42 @@ const queryClient = new QueryClient({
   },
 });
 
+import { useEffect } from 'react';
+import { getMyPreferences } from './api/user-preference-service';
+import { useQuery } from '@tanstack/react-query';
+import { useTheme } from './context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+
 // Authenticated layout wrapper: shows Sidebar + main content
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const { theme, setTheme } = useTheme();
+  const { i18n } = useTranslation();
+  
+  const { data: userPref } = useQuery({
+    queryKey: ['user-preferences'],
+    queryFn: getMyPreferences,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (userPref && userPref.theme && userPref.theme !== 'system') {
+      if (userPref.theme !== theme) {
+        setTheme(userPref.theme as 'light' | 'dark');
+      }
+    } else if (userPref && userPref.theme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      if (systemTheme !== theme) {
+        setTheme(systemTheme);
+      }
+    }
+
+    if (userPref && userPref.language) {
+      if (userPref.language !== i18n.language) {
+        i18n.changeLanguage(userPref.language);
+      }
+    }
+  }, [userPref, theme, setTheme, i18n]);
+
   return (
     <ProtectedRoute>
       <div className="flex min-h-screen bg-[var(--bg-app)]">
@@ -68,7 +102,7 @@ function App() {
               } />
 
               <Route path="/settings" element={
-                <AppLayout><AdminRoute><Settings /></AdminRoute></AppLayout>
+                <AppLayout><Settings /></AppLayout>
               } />
 
               <Route path="/reports" element={

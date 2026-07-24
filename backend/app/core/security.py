@@ -67,6 +67,8 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Security(secu
         return payload
         
     except jwt.ExpiredSignatureError:
+        print("TOKEN ERROR: Token süresi dolmuş", flush=True)
         raise HTTPException(status_code=401, detail="Token süresi dolmuş")
     except Exception as e:
+        print(f"TOKEN ERROR: Token geçersiz: {str(e)}", flush=True)
         raise HTTPException(status_code=401, detail=f"Token geçersiz: {str(e)}")

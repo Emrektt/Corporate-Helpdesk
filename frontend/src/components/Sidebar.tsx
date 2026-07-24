@@ -3,9 +3,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMe } from '../api/auth-service';
-import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, Notification } from '../api/notification-service';
+import { getMyPreferences } from '../api/user-preference-service';
+import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, Notification as AppNotification } from '../api/notification-service';
+import { axiosClient } from '../api/axios-client';
 import { useTheme } from '../context/ThemeContext';
 import { useAdminMode } from '../context/AdminModeContext';
+import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, PlusCircle, BookOpen, BarChart2,
   Settings, LogOut, Bell, Sun, Moon, ChevronRight,
@@ -21,6 +24,7 @@ export const Sidebar: React.FC = () => {
   const { isDark, toggleTheme } = useTheme();
   const { isAdminMode, toggleAdminMode } = useAdminMode();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const [collapsed, setCollapsed] = useState(window.innerWidth < 1024);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -63,6 +67,35 @@ export const Sidebar: React.FC = () => {
 
   const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
 
+  // Masaüstü bildirimleri için
+  const { data: userPref } = useQuery({
+    queryKey: ['user-preferences'],
+    queryFn: getMyPreferences,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const prevUnreadRef = useRef<number>(0);
+  useEffect(() => {
+    if (notifications) {
+      const newUnread = notifications.filter(n => !n.is_read);
+      // Eğer okunmamış mesaj sayısı arttıysa yeni bildirim gelmiştir
+      if (newUnread.length > prevUnreadRef.current) {
+        if (userPref?.desktop_notifications && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+            new Notification('Corporate Helpdesk', { body: newUnread[0].title });
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(permission => {
+              if (permission === 'granted') {
+                new Notification('Corporate Helpdesk', { body: newUnread[0].title });
+              }
+            });
+          }
+        }
+      }
+      prevUnreadRef.current = newUnread.length;
+    }
+  }, [notifications, userPref]);
+
   // Close notification panel on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -87,27 +120,29 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const handleNotifClick = (n: Notification) => {
+  const handleNotifClick = (n: AppNotification) => {
     if (!n.is_read) markReadMutation.mutate(n.id);
     setShowNotifPanel(false);
     if (n.ticket_id) navigate(`/ticket/${n.ticket_id}`);
   };
 
   const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Yeni Talep', path: '/create-ticket', icon: PlusCircle },
-    { name: 'Bilgi Bankası', path: '/knowledge-base', icon: BookOpen },
+    { name: t('sidebar.dashboard'), path: '/dashboard', icon: LayoutDashboard },
+    { name: t('sidebar.new_ticket'), path: '/create-ticket', icon: PlusCircle },
+    { name: t('sidebar.knowledge_base'), path: '/knowledge-base', icon: BookOpen },
   ];
 
   const isAdmin = me?.role === 'ADMIN';
   // Admin User-Mode'da iken sadece normal kullanıcı menüsünü göster
   if (!isAdmin || isAdminMode) {
-    navItems.push({ name: 'Raporlar', path: '/reports', icon: BarChart2 });
+    navItems.push({ name: t('sidebar.reports'), path: '/reports', icon: BarChart2 });
   }
   if (isAdmin && isAdminMode) {
-    navItems.push({ name: 'Sistem Logları', path: '/admin/logs', icon: Activity });
-    navItems.push({ name: 'Kullanıcılar', path: '/admin/users', icon: Users });
-    navItems.push({ name: 'Ayarlar', path: '/settings', icon: Settings });
+    navItems.push({ name: t('sidebar.system_logs'), path: '/admin/logs', icon: Activity });
+    navItems.push({ name: t('sidebar.users'), path: '/admin/users', icon: Users });
+    navItems.push({ name: t('sidebar.settings'), path: '/settings', icon: Settings });
+  } else {
+    navItems.push({ name: t('sidebar.settings'), path: '/settings', icon: Settings });
   }
 
   const currentAccount = accounts[0];
@@ -168,7 +203,7 @@ export const Sidebar: React.FC = () => {
         <nav style={{ flex: 1, padding: '8px 12px', overflowY: 'auto', overflowX: 'hidden' }}>
           {!collapsed && (
             <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 4px 6px' }}>
-              Menü
+              {t('sidebar.menu')}
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -198,7 +233,14 @@ export const Sidebar: React.FC = () => {
 
           {/* Theme Toggle */}
           <button
-            onClick={toggleTheme}
+            onClick={() => {
+              const newTheme = isDark ? 'light' : 'dark';
+              toggleTheme(); // update locally immediately for fast UI
+              // API'yi güncelle
+              axiosClient.put('/api/v1/user-preferences/me', { theme: newTheme })
+                .then(() => queryClient.invalidateQueries({ queryKey: ['user-preferences'] }))
+                .catch(console.error);
+            }}
             style={{
               display: 'flex', alignItems: 'center', gap: '12px',
               padding: '10px 10px',
@@ -213,7 +255,7 @@ export const Sidebar: React.FC = () => {
               transition: 'all 0.15s ease',
               width: '100%',
             }}
-            title={collapsed ? (isDark ? 'Aydınlık Tema' : 'Karanlık Tema') : undefined}
+            title={collapsed ? (isDark ? t('sidebar.light_theme') : t('sidebar.dark_theme')) : undefined}
           >
             {isDark
               ? <Sun size={17} color="var(--warning)" />
@@ -221,7 +263,7 @@ export const Sidebar: React.FC = () => {
             }
             {!collapsed && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
-                <span>{isDark ? 'Aydınlık Tema' : 'Karanlık Tema'}</span>
+                <span>{isDark ? t('sidebar.light_theme') : t('sidebar.dark_theme')}</span>
                 {/* Mini toggle indicator */}
                 <div style={{
                   width: '32px', height: '18px', borderRadius: '999px',
@@ -260,7 +302,7 @@ export const Sidebar: React.FC = () => {
                 width: '100%',
                 position: 'relative',
               }}
-              title={collapsed ? 'Bildirimler' : undefined}
+              title={collapsed ? t('sidebar.notifications') : undefined}
             >
               <div style={{ position: 'relative', display: 'flex' }}>
                 <Bell size={17} />
@@ -279,7 +321,7 @@ export const Sidebar: React.FC = () => {
               </div>
               {!collapsed && (
                 <>
-                  <span>Bildirimler</span>
+                  <span>{t('sidebar.notifications')}</span>
                   {unreadCount > 0 && (
                     <span style={{
                       marginLeft: 'auto', padding: '1px 7px', borderRadius: '999px',
@@ -309,11 +351,11 @@ export const Sidebar: React.FC = () => {
                 animation: 'fadeIn 0.2s ease-out',
               }}>
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-muted)' }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>Bildirimler</span>
+                  <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{t('sidebar.notifications')}</span>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {unreadCount > 0 && (
                       <button onClick={() => markAllMutation.mutate()} style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Check size={12} /> Tümünü Oku
+                        <Check size={12} /> {t('sidebar.mark_all_read')}
                       </button>
                     )}
                     <button onClick={() => setShowNotifPanel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
@@ -355,7 +397,7 @@ export const Sidebar: React.FC = () => {
                   ) : (
                     <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <Bell size={28} style={{ margin: '0 auto 8px', opacity: 0.3 }} />
-                      <div style={{ fontSize: '0.875rem' }}>Bildirim yok</div>
+                      <div style={{ fontSize: '0.875rem' }}>{t('sidebar.no_notifications')}</div>
                     </div>
                   )}
                 </div>
@@ -375,7 +417,7 @@ export const Sidebar: React.FC = () => {
                   }
                 }
               }}
-              title={isAdminMode ? 'Kullanıcı Moduna Geç' : 'Admin Moduna Geç'}
+              title={isAdminMode ? t('sidebar.user_mode') : t('sidebar.admin_mode')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -405,10 +447,10 @@ export const Sidebar: React.FC = () => {
               {!collapsed && (
                 <div style={{ flex: 1, textAlign: 'left' }}>
                   <div style={{ fontSize: '0.75rem', fontWeight: 700, color: isAdminMode ? '#8b5cf6' : '#10b981', lineHeight: 1.2 }}>
-                    {isAdminMode ? 'Admin Modu' : 'Kullanıcı Modu'}
+                    {isAdminMode ? t('sidebar.admin_mode') : t('sidebar.user_mode')}
                   </div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                    {isAdminMode ? 'Kullanıcı moduna geç →' : '← Admin moduna dön'}
+                    {isAdminMode ? t('sidebar.switch_to_user') : t('sidebar.switch_to_admin')}
                   </div>
                 </div>
               )}
@@ -444,7 +486,7 @@ export const Sidebar: React.FC = () => {
                 </div>
                 <button
                   onClick={handleLogout}
-                  title="Çıkış Yap"
+                  title={t('sidebar.logout')}
                   style={{ padding: '6px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', transition: 'color 0.15s ease', flexShrink: 0 }}
                   onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
                   onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}

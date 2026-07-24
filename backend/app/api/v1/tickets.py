@@ -432,12 +432,15 @@ def submit_csat(
         raise HTTPException(status_code=403, detail="Sadece bilet sahibi değlendirme yapabilir.")
 
     if ticket.status not in [TicketStatus.RESOLVED, TicketStatus.CLOSED]:
+        print(f"DEBUG CSAT: Status failed. Status is {ticket.status} type {type(ticket.status)}")
         raise HTTPException(status_code=400, detail="Sadece çözülen biletler değlendirilebilir.")
 
     if ticket.csat_score is not None:
+        print(f"DEBUG CSAT: Score already exists. Score is {ticket.csat_score}")
         raise HTTPException(status_code=400, detail="Bu bilet daha önce değerlendirilmiş.")
 
     if not (1 <= data.score <= 5):
+        print(f"DEBUG CSAT: Invalid score {data.score}")
         raise HTTPException(status_code=422, detail="Puan 1-5 arasında olmalıdır.")
 
     ticket.csat_score = data.score

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { msalInstance } from './auth/msal-config'
+import './i18n'
 
 // MSAL başlatılıyor. Redirect sonrası geri dönüşü burada yakalanıyor.
 msalInstance.initialize().then(() => {

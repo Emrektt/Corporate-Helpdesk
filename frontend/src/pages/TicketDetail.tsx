@@ -164,7 +164,8 @@ export const TicketDetail: React.FC = () => {
   const { data: comments, isLoading: isCommentsLoading } = useQuery({
     queryKey: ['comments', ticketId],
     queryFn: () => getComments(ticketId),
-    enabled: !!ticketId
+    enabled: !!ticketId,
+    refetchInterval: 5000
   });
 
   // Mark CSAT as already submitted if ticket has score
@@ -225,6 +226,11 @@ export const TicketDetail: React.FC = () => {
       setCsatSubmitted(true);
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
     },
+    onError: (error: any) => {
+      const msg = error.response?.data?.detail || 'Değerlendirme gönderilirken bir hata oluştu.';
+      alert(msg);
+      console.error("CSAT Error:", error.response?.data);
+    }
   });
 
   const handleSendComment = (e: React.FormEvent) => {

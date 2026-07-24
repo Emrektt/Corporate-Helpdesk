@@ -3,21 +3,65 @@ import { useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '../auth/msal-config';
 import { LogIn, AlertCircle } from 'lucide-react';
-import { useIsAuthenticated } from '@azure/msal-react';
+
 
 export const Login: React.FC = () => {
     const navigate = useNavigate();
-    const { instance, inProgress } = useMsal();
+    const { instance, accounts, inProgress } = useMsal();
     const [error, setError] = useState('');
-    const [email, setEmail] = useState('');
+
     const [isLoggingIn, setIsLoggingIn] = useState(false);
-    const isMsalAuthenticated = useIsAuthenticated();
     const isLocalAuthenticated = !!localStorage.getItem('token');
+
     React.useEffect(() => {
-        if (isMsalAuthenticated || isLocalAuthenticated) {
-            navigate('/dashboard', { replace: true });
-        }
-    }, [isMsalAuthenticated, isLocalAuthenticated, navigate]);
+        const handleAzureToken = async () => {
+            if (accounts.length > 0 && !isLocalAuthenticated && inProgress === 'none') {
+                try {
+                    setIsLoggingIn(true);
+                    let response;
+                    try {
+                        response = await instance.acquireTokenSilent({
+                            ...loginRequest,
+                            account: accounts[0]
+                        });
+                    } catch (silentError: any) {
+                        console.warn("Silent token acquisition failed, falling back to popup", silentError);
+                        response = await instance.acquireTokenPopup({
+                            ...loginRequest,
+                            account: accounts[0]
+                        });
+                    }
+                    
+                    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+                    const res = await fetch(`${apiUrl}/api/v1/auth/azure`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ access_token: response.accessToken })
+                    });
+                    
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => null);
+                        throw new Error(errData?.detail || 'Sunucu ile iletişim hatası');
+                    }
+                    
+                    const data = await res.json();
+                    localStorage.setItem('token', data.access_token);
+                    navigate('/dashboard', { replace: true });
+                } catch (e: any) {
+                    console.error("Azure Token Backend Error:", e);
+                    setError("Giriş işlemi başarısız oldu: " + e.message);
+                    // Hata durumunda MSAL hesabını temizle ki kullanıcı tekrar deneyebilsin
+                    sessionStorage.clear();
+                } finally {
+                    setIsLoggingIn(false);
+                }
+            } else if (isLocalAuthenticated) {
+                navigate('/dashboard', { replace: true });
+            }
+        };
+        
+        handleAzureToken();
+    }, [accounts, instance, inProgress, isLocalAuthenticated, navigate]);
 
     const handleMicrosoftLogin = () => {
         if (inProgress === 'none') {
@@ -28,24 +72,6 @@ export const Login: React.FC = () => {
         }
     };
 
-    const handleTestLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!email) return setError('Lütfen bir e-posta adresi girin.');
-        
-        try {
-            setIsLoggingIn(true);
-            setError('');
-            const { testLogin } = await import('../api/auth-service');
-            const res = await testLogin(email);
-            localStorage.setItem('token', res.access_token);
-            window.location.href = '/dashboard';
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Giriş başarısız.');
-        } finally {
-            setIsLoggingIn(false);
-        }
-    };
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', padding: '20px' }}>
@@ -68,7 +94,7 @@ export const Login: React.FC = () => {
 
                 <button 
                     onClick={handleMicrosoftLogin}
-                    disabled={inProgress !== 'none'}
+                    disabled={inProgress !== 'none' || isLoggingIn}
                     style={{ 
                         width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                         padding: '10px 16px', borderRadius: '8px', background: 'var(--bg-card)', 
@@ -87,37 +113,7 @@ export const Login: React.FC = () => {
                     Microsoft ile Giriş Yap
                 </button>
 
-                <div style={{ display: 'flex', alignItems: 'center', margin: '10px 0' }}>
-                    <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
-                    <div style={{ padding: '0 10px', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>VEYA (Test)</div>
-                    <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
-                </div>
 
-                <form onSubmit={handleTestLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <input 
-                        type="email" 
-                        placeholder="E-posta adresi (örn: emreeken486@gmail.com)" 
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        style={{
-                            width: '100%', padding: '10px 12px', borderRadius: '8px',
-                            background: 'var(--bg-app)', border: '1px solid var(--border)',
-                            color: 'var(--text-primary)', outline: 'none'
-                        }}
-                    />
-                    <button 
-                        type="submit"
-                        disabled={isLoggingIn}
-                        style={{ 
-                            width: '100%', padding: '10px 16px', borderRadius: '8px', 
-                            background: 'var(--accent)', color: 'white', fontWeight: 600,
-                            border: 'none', cursor: 'pointer', transition: 'all 0.2s ease',
-                            opacity: isLoggingIn ? 0.7 : 1
-                        }}
-                    >
-                        {isLoggingIn ? 'Giriş Yapılıyor...' : 'Test Girişi Yap'}
-                    </button>
-                </form>
 
             </div>
         </div>

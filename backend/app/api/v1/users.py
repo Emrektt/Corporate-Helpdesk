@@ -12,7 +12,7 @@ router = APIRouter()
 
 class UserResponse(BaseModel):
     id: int
-    email: EmailStr
+    email: str
     full_name: str
     role: UserRole
     is_active: bool

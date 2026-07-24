@@ -67,14 +67,20 @@ def get_user_from_token(token: str, db: Session) -> Optional[User]:
     """WebSocket için token'dan kullanıcı bilgisi çeker. Hem yerel JWT hem MSAL destekler."""
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        # Önce yerel JWT'deki 'sub' alanına bak (email olarak saklanıyor)
-        email = payload.get("sub")
-        # 'sub' bir email değilse veya yoksa, MSAL alanlarına bak
-        if not email or "@" not in str(email):
-            email = payload.get("preferred_username") or payload.get("email")
-        if not email:
-            return None
-        return db.query(User).filter(User.email == email).first()
+        oid = payload.get("oid")
+        
+        email = payload.get("preferred_username") or payload.get("email")
+        if not email and "kid" not in payload: # 'kid' yoksa yerel token'dır, sub=email demektir.
+            email = payload.get("sub")
+            
+        user = None
+        if oid:
+            user = db.query(User).filter(User.entra_object_id == oid).first()
+            
+        if not user and email:
+            user = db.query(User).filter(User.email == email).first()
+            
+        return user
     except Exception:
         return None
 

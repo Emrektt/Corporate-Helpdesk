@@ -2,13 +2,17 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment, createCategory, deleteCategory } from '../api/ticket-service';
 import { getCannedResponses, createCannedResponse, deleteCannedResponse, CannedResponse } from '../api/canned-response-service';
+import { getMyPreferences, updateMyPreferences } from '../api/user-preference-service';
 import { getMe } from '../api/auth-service';
-import { Settings as SettingsIcon, Plus, Trash2, Edit2, AlertCircle, Building2, FolderTree, X, BookOpen } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Settings as SettingsIcon, Plus, Trash2, Edit2, AlertCircle, Building2, FolderTree, X, BookOpen, UserCheck, Bell, Moon, Globe, CheckCircle2 } from 'lucide-react';
+import { useAdminMode } from '../context/AdminModeContext';
+import { useTranslation } from 'react-i18next';
 
 export const Settings: React.FC = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'departments' | 'canned'>('departments');
+  const { isAdminMode } = useAdminMode();
+  const [activeTab, setActiveTab] = useState<'departments' | 'canned' | 'preferences'>('preferences');
   const [activeDept, setActiveDept] = useState<number | null>(null);
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
@@ -24,6 +28,21 @@ export const Settings: React.FC = () => {
   // Category Form
   const [catName, setCatName] = useState('');
   const [catPriority, setCatPriority] = useState('MEDIUM');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const { data: userPref } = useQuery({
+    queryKey: ['user-preferences'],
+    queryFn: getMyPreferences,
+  });
+
+  const prefMutation = useMutation({
+    mutationFn: updateMyPreferences,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    }
+  });
 
   const { data: me, isLoading: meLoading } = useQuery({
     queryKey: ['me'],
@@ -144,29 +163,42 @@ export const Settings: React.FC = () => {
     );
   }
 
-  if (me?.role !== 'ADMIN') {
-    return <Navigate to="/dashboard" replace />;
+  if (me?.role !== 'ADMIN' && !isAdminMode) {
+    // Return early handled below with UserHeader
   }
 
   const selectedDepartment = departments?.find(d => d.id === activeDept);
 
+  const UserHeader = () => (
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-1">
+        <SettingsIcon size={24} className="text-[var(--accent)]" />
+        <h1 className="text-2xl font-bold">{t('settings.user_settings')}</h1>
+      </div>
+      <p className="text-[var(--text-muted)] text-sm ml-9">{t('settings.user_settings_desc')}</p>
+    </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="sm:flex sm:items-center sm:justify-between mb-6">
-        <div>
-          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <SettingsIcon size={22} style={{ color: 'var(--text-muted)' }} /> Sistem Ayarları
-          </h1>
-          <p className="page-subtitle">Departmanlar, kategoriler ve hazır cevapları yönetin.</p>
+      {isAdminMode ? (
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <SettingsIcon size={24} className="text-[var(--accent)]" />
+            <h1 className="text-2xl font-bold">{t('settings.system_settings')}</h1>
+          </div>
+          <p className="text-[var(--text-muted)] text-sm ml-9">{t('settings.system_settings_desc')}</p>
         </div>
-      </div>
+      ) : <UserHeader />}
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', background: 'var(--bg-muted)', padding: '4px', borderRadius: '10px', width: 'fit-content' }}>
-        {[
-          { key: 'departments', label: 'Departmanlar & Kategoriler', icon: <Building2 size={14} /> },
-          { key: 'canned', label: 'Hazır Cevaplar', icon: <BookOpen size={14} /> },
-        ].map(tab => (
+      {isAdminMode && (
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', background: 'var(--bg-muted)', padding: '4px', borderRadius: '10px', width: 'fit-content' }}>
+          {[
+            { key: 'departments', label: t('settings.tab_departments'), icon: <Building2 size={14} /> },
+            { key: 'canned', label: t('settings.tab_canned'), icon: <BookOpen size={14} /> },
+            { key: 'preferences', label: t('settings.tab_preferences'), icon: <UserCheck size={14} /> },
+          ].map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as typeof activeTab)}
@@ -182,9 +214,102 @@ export const Settings: React.FC = () => {
             {tab.icon} {tab.label}
           </button>
         ))}
-      </div>
+        </div>
+      )}
 
-      {activeTab === 'canned' ? (
+      {activeTab === 'preferences' ? (
+        <div className="card" style={{ padding: '24px', maxWidth: '650px' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <UserCheck size={18} color="var(--accent)" /> {t('settings.pref_title')}
+          </h2>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
+            {t('settings.pref_desc')}
+          </p>
+
+          {saveSuccess && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', color: '#10b981', fontSize: '0.875rem', marginBottom: '20px' }}>
+              <CheckCircle2 size={16} /> {t('settings.save_success')}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* E-posta Bildirimleri */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', background: 'var(--bg-muted)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Bell size={18} color="var(--accent)" />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{t('settings.email_notif')}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('settings.email_notif_desc')}</div>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={userPref?.email_notifications ?? true}
+                onChange={e => prefMutation.mutate({ email_notifications: e.target.checked })}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+            </div>
+
+            {/* Masaüstü Bildirimleri */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', background: 'var(--bg-muted)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Bell size={18} color="#3b82f6" />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{t('settings.desktop_notif')}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('settings.desktop_notif_desc')}</div>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={userPref?.desktop_notifications ?? true}
+                onChange={e => prefMutation.mutate({ desktop_notifications: e.target.checked })}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+            </div>
+
+            {/* Tema Tercihi */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', background: 'var(--bg-muted)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Moon size={18} color="#f59e0b" />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{t('settings.default_theme')}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('settings.default_theme_desc')}</div>
+                </div>
+              </div>
+              <select
+                value={userPref?.theme || 'system'}
+                onChange={e => prefMutation.mutate({ theme: e.target.value })}
+                className="input-field"
+                style={{ fontSize: '0.8125rem', padding: '4px 8px' }}
+              >
+                <option value="system">{t('settings.theme_system')}</option>
+                <option value="dark">{t('settings.theme_dark')}</option>
+                <option value="light">{t('settings.theme_light')}</option>
+              </select>
+            </div>
+
+            {/* Dil Tercihi */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', background: 'var(--bg-muted)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Globe size={18} color="#10b981" />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{t('settings.ui_language')}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('settings.ui_language_desc')}</div>
+                </div>
+              </div>
+              <select
+                value={userPref?.language || 'tr'}
+                onChange={e => prefMutation.mutate({ language: e.target.value })}
+                className="input-field"
+                style={{ fontSize: '0.8125rem', padding: '4px 8px' }}
+              >
+                <option value="tr">{t('settings.lang_tr')}</option>
+                <option value="en">{t('settings.lang_en')}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'canned' ? (
         /* Hazır Cevaplar Sekmesi */
         <div className="card" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>

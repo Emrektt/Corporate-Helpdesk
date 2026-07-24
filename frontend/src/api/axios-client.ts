@@ -26,7 +26,9 @@ axiosClient.interceptors.request.use(async (config) => {
         if (account) {
             // Sessizce arka plandan token almayı dene
             const response = await msalInstance.acquireTokenSilent({
-                scopes: ["User.Read", import.meta.env.VITE_MSAL_API_SCOPE || ""], // Backend için olan scopes
+                // Sadece kendi API scope'umuzu istiyoruz.
+                // User.Read ile birlikte istemek Azure'un "multiple resources" hatasına yol açar.
+                scopes: [import.meta.env.VITE_MSAL_API_SCOPE || ""],
                 account: account
             });
             
