@@ -8,6 +8,9 @@ export interface ChatMessage {
     sender_role: string;
     content: string;
     is_system: boolean;
+    attachment_url?: string | null;
+    attachment_type?: string | null;
+    attachment_name?: string | null;
     created_at: string;
 }
 
@@ -52,5 +55,17 @@ export const closeChatRoom = async (roomId: number): Promise<void> => {
 
 export const claimChatRoom = async (roomId: number): Promise<ChatRoom> => {
     const response = await axiosClient.put(`/api/v1/chat/rooms/${roomId}/claim`);
+    return response.data;
+};
+
+export const uploadChatAttachment = async (roomId: number, file: File): Promise<ChatMessage> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    const response = await axiosClient.post(`/api/v1/chat/rooms/${roomId}/upload`, formData, {
+        headers: {
+            "Content-Type": "multipart/form-data",
+        },
+    });
     return response.data;
 };
