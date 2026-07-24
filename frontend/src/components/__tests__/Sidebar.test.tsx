@@ -4,10 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import { Sidebar } from '../../components/Sidebar';
 
-vi.mock('@azure/msal-react', () => ({
-  useMsal: () => ({ instance: {}, accounts: [{ name: 'Test User' }] })
-}));
-
 vi.mock('../../context/ThemeContext', () => ({
   useTheme: () => ({ isDark: false, toggleTheme: vi.fn() })
 }));
@@ -27,7 +23,6 @@ import { useAdminMode } from '../../context/AdminModeContext';
 
 describe('Sidebar', () => {
   it('renders standard menu items', () => {
-
     render(
       <BrowserRouter>
         <Sidebar />
@@ -40,7 +35,6 @@ describe('Sidebar', () => {
   });
 
   it('renders admin menu items for ADMIN role', () => {
-    // Override mock for this test using imported modules
     (useQuery as any).mockImplementation((args: any) => {
       if (args.queryKey?.[0] === 'me') {
         return { data: { role: 'ADMIN' } };
