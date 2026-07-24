@@ -24,7 +24,7 @@ export const Login: React.FC = () => {
                             ...loginRequest,
                             account: accounts[0]
                         });
-                    } catch (silentError: any) {
+                    } catch (silentError) {
                         console.warn("Silent token acquisition failed, falling back to popup", silentError);
                         response = await instance.acquireTokenPopup({
                             ...loginRequest,
@@ -47,9 +47,10 @@ export const Login: React.FC = () => {
                     const data = await res.json();
                     localStorage.setItem('token', data.access_token);
                     navigate('/dashboard', { replace: true });
-                } catch (e: any) {
+                } catch (e) {
                     console.error("Azure Token Backend Error:", e);
-                    setError("Giriş işlemi başarısız oldu: " + e.message);
+                    const errorMessage = e instanceof Error ? e.message : String(e);
+                    setError("Giriş işlemi başarısız oldu: " + errorMessage);
                     // Hata durumunda MSAL hesabını temizle ki kullanıcı tekrar deneyebilsin
                     sessionStorage.clear();
                 } finally {

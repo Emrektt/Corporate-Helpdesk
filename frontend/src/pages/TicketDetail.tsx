@@ -226,10 +226,11 @@ export const TicketDetail: React.FC = () => {
       setCsatSubmitted(true);
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
     },
-    onError: (error: any) => {
-      const msg = error.response?.data?.detail || 'Değerlendirme gönderilirken bir hata oluştu.';
+    onError: (error) => {
+      const err = error as { response?: { data?: { detail?: string } } };
+      const msg = err.response?.data?.detail || 'Değerlendirme gönderilirken bir hata oluştu.';
       alert(msg);
-      console.error("CSAT Error:", error.response?.data);
+      console.error("CSAT Error:", err.response?.data);
     }
   });
 
