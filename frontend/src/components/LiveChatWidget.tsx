@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMe } from '../api/auth-service';
-import { createChatRoom, getMyRoom, getAllRooms, closeChatRoom, claimChatRoom, ChatMessage, ChatRoom } from '../api/chat-service';
+import { createChatRoom, getMyRoom, getAllRooms, closeChatRoom, claimChatRoom, uploadChatAttachment, ChatMessage, ChatRoom } from '../api/chat-service';
 import {
   MessageCircle, X, Send, Minimize2, Maximize2,
-  ChevronDown, Users, Headphones, CheckCircle2, Loader2
+  ChevronDown, Users, Headphones, CheckCircle2, Loader2,
+  MoreVertical, Image as ImageIcon, Paperclip, Camera, LogOut
 } from 'lucide-react';
 import { loginRequest } from '../auth/msal-config';
 
@@ -35,10 +36,15 @@ export const LiveChatWidget: React.FC = () => {
   const [otherTyping, setOtherTyping] = useState(false);
   const [wsStatus, setWsStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const isOpenRef = useRef(isOpen);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const isSupport = me?.role === 'ADMIN' || me?.role === 'SUPPORT_AGENT';
@@ -53,15 +59,18 @@ export const LiveChatWidget: React.FC = () => {
 
   // Mesajları en alta kaydır
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [messages, isOpen]);
 
-  // Chat açıldığında okunmamış sayısını sıfırla
+  // unreadCount sıfırlama ve ref güncelleme
   useEffect(() => {
-    if (isOpen) setUnreadCount(0);
-  }, [isOpen]);
+    isOpenRef.current = isOpen;
+    if (isOpen && unreadCount > 0) {
+      setUnreadCount(0);
+    }
+  }, [isOpen, unreadCount]);
 
   // ─── WebSocket Bağlantısı ──────────────────────────────────────────────────
 
@@ -89,7 +98,11 @@ export const LiveChatWidget: React.FC = () => {
       return;
     }
 
-    const ws = new WebSocket(`ws://localhost:8001/api/v1/chat/ws/${room.id}?token=${token}`);
+    const baseUrl = import.meta.env.VITE_API_URL 
+      ? import.meta.env.VITE_API_URL.replace('http:', 'ws:').replace('https:', 'wss:')
+      : 'ws://localhost:8001';
+      
+    const ws = new WebSocket(`${baseUrl}/api/v1/chat/ws/${room.id}?token=${token}`);
     wsRef.current = ws;
 
     ws.onopen = () => setWsStatus('connected');
@@ -105,7 +118,7 @@ export const LiveChatWidget: React.FC = () => {
 
       if (data.type === 'message' || data.type === 'system') {
         setMessages(prev => [...prev, data]);
-        if (!isOpen) {
+        if (!isOpenRef.current) {
           setUnreadCount(c => c + 1);
         }
         return;
@@ -172,15 +185,36 @@ export const LiveChatWidget: React.FC = () => {
     }
   });
 
+  const uploadMutation = useMutation({
+    mutationFn: ({ roomId, file }: { roomId: number, file: File }) => uploadChatAttachment(roomId, file),
+    onSuccess: () => {
+      // Message comes via WS, so we don't need to manually append
+    }
+  });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeRoom) return;
+    uploadMutation.mutate({ roomId: activeRoom.id, file });
+    setIsOptionsOpen(false);
+    e.target.value = ''; // Reset
+  };
+
   // ─── Mesaj Gönderme ───────────────────────────────────────────────────────
 
   const sendMessage = () => {
-    if (!inputText.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    // Basic validation
+    if (!inputText || inputText.trim() === '') return;
+    
+    // Check websocket status
+    if (!wsRef.current || wsRef.current.readyState !== 1) return; // 1 = OPEN
 
     wsRef.current.send(JSON.stringify({
       type: 'message',
       content: inputText.trim()
     }));
+    
+    // Immediately clear input text
     setInputText('');
 
     // Typing durumunu temizle
@@ -228,11 +262,10 @@ export const LiveChatWidget: React.FC = () => {
   if (!me) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 flex flex-col items-end gap-3">
       {/* Chat Penceresi */}
       {isOpen && !isMinimized && (
-        <div className="w-[380px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
-          style={{ height: '520px' }}>
+        <div className="w-[88vw] max-w-[350px] sm:w-[380px] sm:max-w-none h-[75vh] max-h-[500px] sm:h-[520px] sm:max-h-none bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
 
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between flex-shrink-0">
@@ -378,7 +411,24 @@ export const LiveChatWidget: React.FC = () => {
                         <div className={`max-w-[75%] ${isMine ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
                           {!isMine && <p className="text-xs text-slate-500 font-medium px-1">{msg.sender_name}</p>}
                           <div className={`px-3 py-2 rounded-2xl text-sm ${isMine ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white text-slate-800 border border-slate-200 rounded-tl-sm'}`}>
-                            {msg.content}
+                            {msg.attachment_url ? (
+                              msg.attachment_type === 'image' ? (
+                                <div className="flex flex-col gap-1">
+                                  {msg.content !== msg.attachment_name && <span>{msg.content}</span>}
+                                  <img src={`http://localhost:8001${msg.attachment_url}`} alt="Ek" className="max-w-[200px] rounded-lg mt-1" />
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  {msg.content !== msg.attachment_name && <span>{msg.content}</span>}
+                                  <a href={`http://localhost:8001${msg.attachment_url}`} download className="flex items-center gap-2 mt-1 p-2 bg-black/10 rounded-lg hover:bg-black/20 transition-colors text-inherit">
+                                    <Paperclip className="w-4 h-4 flex-shrink-0" />
+                                    <span className="text-xs truncate">{msg.attachment_name}</span>
+                                  </a>
+                                </div>
+                              )
+                            ) : (
+                              msg.content
+                            )}
                           </div>
                           <p className="text-xs text-slate-400 px-1">{formatTime(msg.created_at)}</p>
                         </div>
@@ -400,21 +450,68 @@ export const LiveChatWidget: React.FC = () => {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Kapat butonu */}
-                {activeRoom && activeRoom.status === 'ACTIVE' && (
-                  <div className="px-3 pt-2 flex justify-end">
-                    <button
-                      onClick={() => closeRoomMutation.mutate(activeRoom.id)}
-                      disabled={closeRoomMutation.isPending}
-                      className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
-                    >
-                      Sohbeti Sonlandır
-                    </button>
-                  </div>
-                )}
-
                 {/* Mesaj gönderme kutusu */}
-                <div className="p-3 border-t border-slate-100 bg-white flex gap-2">
+                <div className="p-3 border-t border-slate-100 bg-white flex gap-2 relative items-center">
+                  
+                  {/* Options Menu Toggle */}
+                  <div className="relative flex-shrink-0">
+                    <button
+                      onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+                      className="w-9 h-9 flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                      title="Seçenekler"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+
+                    {/* Options Dropdown */}
+                    {isOptionsOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setIsOptionsOpen(false)}
+                        ></div>
+                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                          <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left w-full">
+                            <ImageIcon className="w-4 h-4 text-blue-500" />
+                            Fotoğraf Yükle
+                          </button>
+                          
+                          {/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+                            <button onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left w-full">
+                              <Camera className="w-4 h-4 text-emerald-500" />
+                              Fotoğraf Çek
+                            </button>
+                          )}
+
+                          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left w-full">
+                            <Paperclip className="w-4 h-4 text-purple-500" />
+                            Dosya Yükle
+                          </button>
+                          
+                          <div className="h-px bg-slate-100 my-1"></div>
+                          
+                          <button 
+                            onClick={() => {
+                              setIsOptionsOpen(false);
+                              if (activeRoom) closeRoomMutation.mutate(activeRoom.id);
+                            }}
+                            disabled={closeRoomMutation.isPending}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left w-full font-medium"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            Sohbetten Ayrıl
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Hidden File Inputs */}
+                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                  <input type="file" accept="image/*" ref={imageInputRef} onChange={handleFileUpload} className="hidden" />
+                  <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handleFileUpload} className="hidden" />
+
+                  {/* Input - Made slightly smaller */}
                   <input
                     type="text"
                     value={inputText}
@@ -422,14 +519,21 @@ export const LiveChatWidget: React.FC = () => {
                     onKeyDown={handleKeyDown}
                     placeholder="Mesajınızı yazın..."
                     disabled={wsStatus !== 'connected' || activeRoom?.status === 'CLOSED'}
-                    className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="flex-1 text-sm border border-slate-200 rounded-xl px-3 h-9 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50 disabled:text-slate-400"
                   />
+                  
+                  {/* Send Button */}
                   <button
-                    onClick={sendMessage}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      sendMessage();
+                    }}
                     disabled={!inputText.trim() || wsStatus !== 'connected' || activeRoom?.status === 'CLOSED'}
-                    className="w-9 h-9 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+                    className="w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl flex items-center justify-center transition-colors flex-shrink-0 z-10 cursor-pointer shadow-sm"
                   >
-                    <Send className="w-4 h-4" />
+                    <Send className="w-5 h-5" />
                   </button>
                 </div>
               </>
@@ -458,7 +562,7 @@ export const LiveChatWidget: React.FC = () => {
       >
         {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
         {!isOpen && unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+          <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
             {unreadCount}
           </span>
         )}
